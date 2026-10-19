@@ -29,7 +29,12 @@ const ymd = ms => isoOf(ms).split('-').join('.');
 const dateOf = e => e.date || isoOf(e.created || Date.now());
 
 // ---- сервер ----
+let inflight = 0;
 async function api(action, payload) {
+  if (action !== 'login' && action !== 'roleLogin') { inflight++; try { return await apiRaw(action, payload) } finally { inflight-- } }
+  return apiRaw(action, payload);
+}
+async function apiRaw(action, payload) {
   if (!API) throw new Error('Приложение ещё не подключено к таблице (нет адреса в config.js).');
   const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ action }, payload || {})) });
   const j = await r.json();
@@ -45,6 +50,7 @@ async function load(quiet) {
     const d = j.data;
     allStaff = d.staff; staff = allStaff.filter(s => !s.hidden);
     cats = d.cats.length ? d.cats : ['Бензин', 'Еда', 'Транспорт', 'Прочее'];
+    if (inflight > 0) return;              // идёт сохранение — свежие данные возьмём в следующий раз
     expenses = d.expenses; payments = d.payments;
     mergePending();
     if (me && !staff.some(s => s.id === me)) { me = ''; ls.set('me', '') }
@@ -231,15 +237,16 @@ document.addEventListener('click', async e => {
       pm.className = 'msg'; pm.textContent = `Выдать ${s.name} ${fmt(amtv)}?`;
       return;
     }
-    pb.disabled = true; pb.textContent = 'Сохраняю…';
+    // сразу показываем результат, сервер подтверждает в фоне
+    const tmp = { id: 'tmp' + Date.now(), date: isoDay(0), staff: s.id, amount: amtv, by: 'Бухгалтер', created: Date.now(), pending: true };
+    payments.push(tmp); render();
+    pm.className = 'msg ok'; pm.textContent = `Выдано: ${s.name} — ${fmt(amtv)} · сохраняется…`;
     try {
       const r = await api('pay', { rolePass, staff: s.id, amount: amtv });
-      payments.push({ id: r.id, date: isoDay(0), staff: s.id, amount: amtv, by: 'Бухгалтер', created: Date.now() });
-      render();
-      pm.className = 'msg ok'; pm.innerHTML = ''; pm.append(`Выдано: ${s.name} — ${fmt(amtv)}. `);
+      tmp.id = r.id; delete tmp.pending; render();
+      pm.className = 'msg ok'; pm.innerHTML = ''; pm.append(`Выдано: ${s.name} — ${fmt(amtv)} ✓ `);
       const ub = document.createElement('button'); ub.type = 'button'; ub.className = 'undo'; ub.textContent = 'Отменить'; ub.dataset.delpay = r.id; ub.dataset.now = '1'; pm.append(ub);
-      load(true);
-    } catch (err) { pm.className = 'msg err'; pm.textContent = err.message; render() }
+    } catch (err) { payments = payments.filter(x => x !== tmp); pm.className = 'msg err'; pm.textContent = 'Не сохранилось: ' + err.message; render() }
     return;
   }
 
@@ -250,9 +257,10 @@ document.addEventListener('click', async e => {
       dp.classList.add('armed'); dp.textContent = 'Точно отменить?';
       setTimeout(() => { if (dp.isConnected) { dp.classList.remove('armed'); dp.textContent = 'Отменить' } }, 4000); return
     }
-    dp.disabled = true;
-    try { await api('unpay', { rolePass, id: p.id }); payments = payments.filter(x => x.id !== p.id); $('payMsg').className = 'msg'; $('payMsg').textContent = 'Выдача отменена.'; render(); load(true) }
-    catch (err) { $('payMsg').className = 'msg err'; $('payMsg').textContent = err.message; dp.disabled = false }
+    if (p.pending) return;
+    payments = payments.filter(x => x.id !== p.id); $('payMsg').className = 'msg'; $('payMsg').textContent = 'Выдача отменена.'; render();
+    try { await api('unpay', { rolePass, id: p.id }) }
+    catch (err) { payments.push(p); $('payMsg').className = 'msg err'; $('payMsg').textContent = 'Не удалось отменить: ' + err.message; render() }
     return;
   }
 
@@ -260,9 +268,9 @@ document.addEventListener('click', async e => {
   if (d) {
     const ex = expenses.find(x => x.id === d.dataset.del); if (!ex || !canDel(ex)) return;
     if (!d.classList.contains('armed')) { d.classList.add('armed'); d.textContent = 'Удалить?'; setTimeout(() => { if (d.isConnected) { d.classList.remove('armed'); d.textContent = '×' } }, 3500); return }
-    d.disabled = true;
-    try { await api('del', Object.assign({ id: ex.id }, authFor(ex.staff))); expenses = expenses.filter(x => x.id !== ex.id); render(); load(true) }
-    catch (err) { msg(err.message, 'err'); d.disabled = false }
+    expenses = expenses.filter(x => x.id !== ex.id); render();
+    try { await api('del', Object.assign({ id: ex.id }, authFor(ex.staff))) }
+    catch (err) { expenses.push(ex); msg('Не удалось удалить: ' + err.message, 'err'); render() }
   }
 });
 
