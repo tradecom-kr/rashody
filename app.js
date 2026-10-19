@@ -80,9 +80,12 @@ const initials = n => String(n).split(/\s+/).filter(Boolean).slice(0, 2).map(w =
 
 function renderForm() {
   const sel = $('who');
-  if (document.activeElement !== sel) {
-    sel.innerHTML = `<option value="">Кто вы?</option>` + staff.map(s => `<option value="${esc(s.id)}"${s.id === me ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+  const sig = staff.map(s => s.id + ':' + s.name).join('|');
+  if (sel.dataset.sig !== sig) {           // пересобираем список, только когда сотрудники изменились
+    sel.innerHTML = `<option value="">Кто вы?</option>` + staff.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+    sel.dataset.sig = sig;
   }
+  if (sel.value !== me) sel.value = me;
   const need = me && !isVerified(me);
   $('pinRow').hidden = !need;
   if (!need) $('pinErr').hidden = true;
@@ -107,7 +110,9 @@ function renderSummary() {
 }
 function renderHistory() {
   const sel = $('hWho');
-  if (document.activeElement !== sel) sel.innerHTML = `<option value="all">Все сотрудники</option>` + staff.map(s => `<option value="${esc(s.id)}"${s.id === hWho ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+  const sig = staff.map(s => s.id + ':' + s.name).join('|');
+  if (sel.dataset.sig !== sig) { sel.innerHTML = `<option value="all">Все сотрудники</option>` + staff.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join(''); sel.dataset.sig = sig }
+  if (sel.value !== hWho) sel.value = hWho;
   if (!ready) { $('log').innerHTML = '<div class="empty">Загрузка…</div>'; return }
   const list = [...expenses, ...payments.map(p => Object.assign({}, p, { pmt: true }))]
     .filter(e => hWho === 'all' || e.staff === hWho)
