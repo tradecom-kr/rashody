@@ -193,7 +193,10 @@ function add_(req) {
   if (date > today) fail_('Дата не может быть в будущем.');
   var cat = String(req.cat || '').slice(0, 40);
   var note = String(req.note || '').slice(0, 120);
-  var id = newId_();
+  // ID приходит с телефона: если связь оборвалась и запрос повторили — дубль не создаётся
+  var cid = String(req.clientId || '');
+  var id = /^[A-Za-z0-9_-]{8,40}$/.test(cid) ? cid : newId_();
+  if (cid && rows_('exp').some(function (r) { return String(r['ID']) === id; })) return { ok: true, id: id, dup: true };
   var sh = sheet_('exp');
   sh.appendRow([id, dateCell_(date), s.id, s.name, cat, amount, note, new Date()]);
   var r = sh.getLastRow();

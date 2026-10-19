@@ -46,6 +46,7 @@ async function load(quiet) {
     allStaff = d.staff; staff = allStaff.filter(s => !s.hidden);
     cats = d.cats.length ? d.cats : ['Бензин', 'Еда', 'Транспорт', 'Прочее'];
     expenses = d.expenses; payments = d.payments;
+    mergePending();
     if (me && !staff.some(s => s.id === me)) { me = ''; ls.set('me', '') }
     if (!cats.includes(cat)) cat = cats[0];
     ready = true; lastLoad = Date.now(); $('notice').hidden = true;
@@ -120,8 +121,8 @@ function renderHistory() {
   $('log').innerHTML = list.length ? list.map(e => {
     if (e.pmt) return `<div class="li pmt"><span style="min-width:0"><b>Выдано</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.by || 'выдача')}</small></span>
       <span class="a">+${fmt(e.amount)}</span>${canUndoPay(e) ? `<button class="undo" type="button" data-delpay="${esc(e.id)}">Отменить</button>` : '<span></span>'}</div>`;
-    return `<div class="li"><span style="min-width:0"><b>${esc(e.note || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.cat)}</small></span>
-      <span class="a">−${fmt(e.amount)}</span>${canDel(e) ? `<button class="del" type="button" data-del="${esc(e.id)}" aria-label="Удалить">×</button>` : '<span></span>'}</div>`
+    return `<div class="li"><span style="min-width:0"><b>${esc(e.note || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.cat)}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small></span>
+      <span class="a">−${fmt(e.amount)}</span>${canDel(e) && !e.pending ? `<button class="del" type="button" data-del="${esc(e.id)}" aria-label="Удалить">×</button>` : '<span></span>'}</div>`
   }).join('') : '<div class="empty">Расходов пока нет.</div>';
 }
 function renderRole() {
@@ -156,6 +157,41 @@ $('pinGo').addEventListener('click', tryPin);
 $('pinIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); tryPin() } });
 
 let busy = false;
+// ---- очередь отправки: расход появляется сразу, в таблицу уходит в фоне ----
+function getQueue() { try { return JSON.parse(ls.get('queue') || '[]') } catch (e) { return [] } }
+function setQueue(q) { ls.set('queue', JSON.stringify(q)) }
+function mergePending() {
+  for (const q of getQueue()) if (!expenses.some(e => e.id === q.payload.clientId)) expenses.push(Object.assign({}, q.local, { pending: true }));
+}
+let flushing = false;
+async function flush() {
+  if (flushing) return; flushing = true;
+  try {
+    let q = getQueue();
+    while (q.length) {
+      const item = q[0];
+      try {
+        await api('add', item.payload);
+        const ex = expenses.find(e => e.id === item.payload.clientId); if (ex) delete ex.pending;
+        q = getQueue().filter(x => x.payload.clientId !== item.payload.clientId); setQueue(q);
+        if ($('msg').dataset.pid === item.payload.clientId) msg($('msg').textContent.replace(' · сохраняется…', '') + ' ✓', 'ok');
+        render();
+      } catch (err) {
+        if (err instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(err.message)) {
+          msg('Нет связи — расход сохранён в телефоне и отправится автоматически, когда появится интернет.', 'err');
+          break;   // нет интернета: попробуем позже
+        }
+        // сервер отказал (пароль и т. п.) — убираем из очереди и с экрана
+        q = getQueue().filter(x => x.payload.clientId !== item.payload.clientId); setQueue(q);
+        expenses = expenses.filter(e => e.id !== item.payload.clientId);
+        if (/пароль/i.test(err.message)) ls.del('pin_' + item.payload.staff);
+        msg(`Не сохранилось (${fmt(item.local.amount)}): ${err.message}`, 'err'); render();
+      }
+    }
+  } finally { flushing = false }
+}
+window.addEventListener('online', flush);
+
 $('form').addEventListener('submit', async e => {
   e.preventDefault(); if (busy) return;
   const who = current(), a = parse(amt.value), date = $('date').value || isoDay(0);
@@ -164,17 +200,15 @@ $('form').addEventListener('submit', async e => {
   if (!a) { msg('Введите сумму.', 'err'); amt.focus(); return }
   if (a > 100000000) { msg('Сумма слишком большая — проверьте, нет ли лишних нулей.', 'err'); return }
   if (date > isoDay(0)) { msg('Дата не может быть в будущем.', 'err'); return }
-  busy = true; $('go').disabled = true; $('go').textContent = 'Сохраняю…';
-  try {
-    const note = $('note').value.trim();
-    const r = await api('add', Object.assign({ cat, amount: a, date, note }, authFor(who.id), { staff: who.id }));
-    expenses.push({ id: r.id, date, staff: who.id, cat, amount: a, note, created: Date.now() });
-    msg(`Списано ${fmt(a)} · ${cat} · ${who.name} · ${dmy(date)}`, 'ok');
-    amt.value = ''; $('note').value = ''; render(); load(true);
-  } catch (err) {
-    if (/пароль/i.test(err.message)) { ls.del('pin_' + who.id); render() }
-    msg(err.message || 'Не сохранилось. Попробуйте ещё раз.', 'err');
-  } finally { busy = false; $('go').disabled = false; $('go').textContent = 'Списать' }
+  const note = $('note').value.trim();
+  const clientId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const local = { id: clientId, date, staff: who.id, cat, amount: a, note, created: Date.now() };
+  const payload = Object.assign({ cat, amount: a, date, note, clientId }, authFor(who.id), { staff: who.id });
+  setQueue(getQueue().concat([{ payload, local }]));
+  expenses.push(Object.assign({}, local, { pending: true }));
+  msg(`Списано ${fmt(a)} · ${cat} · ${who.name} · ${dmy(date)} · сохраняется…`, 'ok'); $('msg').dataset.pid = clientId;
+  amt.value = ''; $('note').value = ''; render();
+  flush();
 });
 
 // ---- клики: категории, выдачи, удаление ----
@@ -275,7 +309,7 @@ async function exportXlsx() {
 $('dlLedger').addEventListener('click', exportXlsx);
 
 // ---- запуск и автообновление ----
-render(); load();
+render(); load().then(flush);
 setInterval(() => {
   if (document.hidden) return;
   $('date').max = isoDay(0);
