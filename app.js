@@ -102,6 +102,9 @@ function renderForm() {
   }
   if (sel.value !== me) sel.value = me;
   const need = me && !isVerified(me);
+  const cs = current();
+  $('meLine').hidden = !cs || isOwner();
+  if (cs) $('meName').textContent = `Вы вошли как ${cs.name}`;
   $('pinRow').hidden = !need;
   if (!need) $('pinErr').hidden = true;
   $('cats').style.gridTemplateColumns = `repeat(${Math.min(cats.length, 4) || 1},minmax(0,1fr))`;
@@ -169,6 +172,11 @@ async function tryPin() {
   finally { $('pinGo').disabled = false }
 }
 $('pinGo').addEventListener('click', tryPin);
+// выход сотрудника: забыть пароль на этом телефоне
+$('meOut').addEventListener('click', () => {
+  if (me) ls.del('pin_' + me);
+  me = ''; ls.set('me', ''); $('pinIn').value = ''; msg('', ''); render();
+});
 $('pinIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); tryPin() } });
 
 let busy = false;

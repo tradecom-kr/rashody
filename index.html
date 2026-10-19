@@ -22,6 +22,7 @@ html,body{margin:0}
 .rolebox{display:flex;gap:8px}
 .rolebox input{font:inherit;font-size:15px;padding:9px 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--fg);min-width:0;flex:1}
 .loading{opacity:.6;pointer-events:none}
+.meline{margin:-6px 0 0;font-size:13px;color:var(--muted);padding-left:4px}
 .sheetlink{color:var(--muted);font-size:13px}
 .taxrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .taxrow select{font:inherit;font-size:15px;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--fg)}
@@ -42,6 +43,7 @@ html,body{margin:0}
       <button type="button" class="tubtn" id="pinGo">Войти</button>
     </div>
     <p class="msg err" id="pinErr" hidden></p>
+    <p class="meline" id="meLine" hidden><span id="meName"></span> · <button type="button" class="linkbtn" id="meOut">Выйти</button></p>
     <label class="amt-cap" for="amount">Сумма расхода</label>
     <div class="amt-wrap">
       <input class="amt" id="amount" inputmode="numeric" autocomplete="off" placeholder="Введите сумму" aria-label="Сумма в вонах">
@@ -90,6 +92,6 @@ html,body{margin:0}
 <script src="config.js?v=2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="xlsx-book.js?v=6"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
