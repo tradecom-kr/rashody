@@ -53,8 +53,9 @@ input[type=date].pill{font-family:var(--font-body);font-size:15px}
 .cats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .cats button{background:var(--ink-2);border:0;border-radius:12px;padding:12px 4px;font-size:14px;font-weight:600;color:var(--ink-fg);min-width:0;line-height:1.2}
 .cats button[aria-pressed="true"]{background:var(--ink-fg);color:var(--ink)}
-.note{font:inherit;font-size:15px;padding:11px 14px;border-radius:12px;border:0;background:var(--ink-2);color:var(--ink-fg);width:100%}
-.note::placeholder{color:var(--ink-muted)}
+.note{font:inherit;font-size:15px;padding:12px 14px;border-radius:12px;border:0;background:#ffffff;color:#1d1f24;width:100%}
+.note::placeholder{color:#8a90a8}
+.note:focus{outline:none;box-shadow:inset 0 0 0 3px #8fa2ff}
 .go{background:var(--ink-fg);color:var(--ink);border:0;border-radius:14px;padding:15px;font-size:18px;font-weight:700}
 .go:disabled{opacity:.45;cursor:not-allowed}
 .hero .tubtn{background:var(--ink-fg);color:var(--ink)}
