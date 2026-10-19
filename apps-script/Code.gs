@@ -164,8 +164,9 @@ function role_(pass) {
   pass = String(pass || '');
   if (!pass) return '';
   var st = settings_();
+  // Бухгалтер — высшая роль (полные права). Старая строка «Пароль руководителя» тоже работает, если заполнена.
+  if (String(st['Пароль бухгалтера'] || '') && pass === String(st['Пароль бухгалтера'])) return 'owner';
   if (String(st['Пароль руководителя'] || '') && pass === String(st['Пароль руководителя'])) return 'owner';
-  if (String(st['Пароль бухгалтера'] || '') && pass === String(st['Пароль бухгалтера'])) return 'acc';
   return '';
 }
 
@@ -215,14 +216,14 @@ function del_(req) {
 
 function pay_(req) {
   var role = role_(req.rolePass);
-  if (!role) fail_('Выдавать могут только руководитель и бухгалтер.');
+  if (!role) fail_('Выдавать может только бухгалтер.');
   var s = staffAll_().filter(function (x) { return x.id === String(req.staff); })[0] || fail_('Сотрудник не найден.');
   var amount = Math.round(num_(req.amount));
   if (!(amount > 0)) fail_('Нечего выдавать.');
   var id = newId_();
   var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   var sh = sheet_('pay');
-  sh.appendRow([id, dateCell_(today), s.id, s.name, amount, role === 'owner' ? 'Руководитель' : 'Бухгалтер', new Date()]);
+  sh.appendRow([id, dateCell_(today), s.id, s.name, amount, 'Бухгалтер', new Date()]);
   var r = sh.getLastRow();
   sh.getRange(r, 2).setNumberFormat('yyyy.mm.dd');
   sh.getRange(r, 5).setNumberFormat('#,##0');
@@ -232,7 +233,7 @@ function pay_(req) {
 
 function unpay_(req) {
   var role = role_(req.rolePass);
-  if (!role) fail_('Отменять выдачу могут только руководитель и бухгалтер.');
+  if (!role) fail_('Отменять выдачу может только бухгалтер.');
   var row = rows_('pay').filter(function (r) { return String(r['ID']) === String(req.id); })[0];
   if (!row) fail_('Выдача не найдена.');
   if (role === 'acc' && String(row['Кто отметил']) !== 'Бухгалтер') fail_('Бухгалтер может отменить только свою выдачу.');

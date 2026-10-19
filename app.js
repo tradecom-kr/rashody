@@ -37,7 +37,7 @@ async function api(action, payload) {
   return j;
 }
 async function load(quiet) {
-  if (!API) { notice('Приложение ещё не подключено к таблице. Руководителю: впишите адрес веб-приложения в config.js.'); ready = true; render(); return }
+  if (!API) { notice('Приложение ещё не подключено к таблице. Впишите адрес веб-приложения в config.js.'); ready = true; render(); return }
   try {
     const r = await fetch(API + '?action=data&t=' + Date.now());
     const j = await r.json();
@@ -65,10 +65,10 @@ function isVerified(id) {
   return !s.hasPin || !!pinOf(id);
 }
 function current() { const s = staff.find(x => x.id === me); return s && isVerified(s.id) ? s : null }
-const isOwner = () => role === 'owner';
+const isOwner = () => role === 'owner' || role === 'acc'; // бухгалтер — полные права
 const canPay = () => role === 'owner' || role === 'acc';
 function canDel(e) { if (isOwner()) return true; const c = current(); return !!c && e.staff === c.id }
-const canUndoPay = p => isOwner() || (role === 'acc' && p.by === 'Бухгалтер');
+const canUndoPay = p => isOwner();
 function authFor(staffId) { return isOwner() ? { rolePass } : { staff: staffId, pin: pinOf(staffId) } }
 const paidBy = id => payments.filter(p => p.staff === id).reduce((a, p) => a + p.amount, 0);
 const spentBy = id => expenses.filter(e => e.staff === id).reduce((a, e) => a + e.amount, 0);
@@ -126,10 +126,10 @@ function renderHistory() {
 }
 function renderRole() {
   $('tools').hidden = !canPay();
-  if (SHEET_URL && isOwner()) { $('sheetLink').href = SHEET_URL; $('sheetLink').hidden = false } else $('sheetLink').hidden = true;
+  $('sheetLink').hidden = true;
   $('roleLine').innerHTML = role
-    ? `<span>Вы вошли как ${role === 'owner' ? 'руководитель' : 'бухгалтер'}</span><button type="button" class="linkbtn" id="roleOut">Выйти</button>`
-    : `<button type="button" class="linkbtn" id="roleOpen">Вход для руководителя или бухгалтера</button>`;
+    ? `<span>Вы вошли как бухгалтер</span><button type="button" class="linkbtn" id="roleOut">Выйти</button>`
+    : `<button type="button" class="linkbtn" id="roleOpen">Вход для бухгалтера</button>`;
 }
 function render() { renderForm(); renderSummary(); renderHistory(); renderRole() }
 
@@ -149,7 +149,7 @@ async function tryPin() {
   if (!v) { err.textContent = 'Введите пароль.'; err.hidden = false; return }
   $('pinGo').disabled = true;
   try { await api('login', { staff: s.id, pin: v }); ls.set('pin_' + s.id, v); $('pinIn').value = ''; render() }
-  catch (e2) { err.textContent = 'Неверный пароль. Если забыли — спросите у руководителя.'; err.hidden = false; $('pinIn').select() }
+  catch (e2) { err.textContent = 'Неверный пароль. Если забыли — спросите у бухгалтера.'; err.hidden = false; $('pinIn').select() }
   finally { $('pinGo').disabled = false }
 }
 $('pinGo').addEventListener('click', tryPin);
@@ -200,7 +200,7 @@ document.addEventListener('click', async e => {
     pb.disabled = true; pb.textContent = 'Сохраняю…';
     try {
       const r = await api('pay', { rolePass, staff: s.id, amount: amtv });
-      payments.push({ id: r.id, date: isoDay(0), staff: s.id, amount: amtv, by: isOwner() ? 'Руководитель' : 'Бухгалтер', created: Date.now() });
+      payments.push({ id: r.id, date: isoDay(0), staff: s.id, amount: amtv, by: 'Бухгалтер', created: Date.now() });
       render();
       pm.className = 'msg ok'; pm.innerHTML = ''; pm.append(`Выдано: ${s.name} — ${fmt(amtv)}. `);
       const ub = document.createElement('button'); ub.type = 'button'; ub.className = 'undo'; ub.textContent = 'Отменить'; ub.dataset.delpay = r.id; ub.dataset.now = '1'; pm.append(ub);
