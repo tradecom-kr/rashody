@@ -16,7 +16,7 @@ const ls = {
 
 // ---- состояние ----
 let allStaff = [], staff = [], cats = [], expenses = [], payments = [];
-let me = ls.get('me') || '', cat = ls.get('cat') || '', hWho = 'all';
+let me = ls.get('me') || '', cat = ls.get('cat') || '', hWho = 'all', hQ = '';
 let role = ls.get('role') || '', rolePass = ls.get('rolePass') || '';
 let ready = false, lastLoad = 0;
 
@@ -151,7 +151,12 @@ function renderHistory() {
   if (!ready) { $('log').innerHTML = '<div class="empty">Загрузка…</div>'; return }
   const list = [...expenses, ...payments.map(p => Object.assign({}, p, { pmt: true }))]
     .filter(e => hWho === 'all' || e.staff === hWho)
-    .sort((a, b) => dateOf(b).localeCompare(dateOf(a)) || (b.created || 0) - (a.created || 0)).slice(0, 300);
+    .filter(matchQ)
+    .sort((a, b) => dateOf(b).localeCompare(dateOf(a)) || (b.created || 0) - (a.created || 0));
+  const hc = $('hCount');
+  hc.hidden = !hQ.trim();
+  if (hQ.trim()) { const sp = list.filter(e => !e.pmt && counts(e)).reduce((a, e) => a + e.amount, 0); hc.textContent = `Найдено: ${list.length}` + (sp ? ` · расходы на ${fmt(sp)}` : '') }
+  list.splice(300);
   $('log').innerHTML = list.length ? list.map(e => {
     if (e.pmt) return `<div class="li pmt${isAdv(e) ? ' adv' : ''}"><span style="min-width:0"><b>${isAdv(e) ? 'Аванс (на руки)' : 'Выдано'}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.by || 'выдача')}</small></span>
       <span class="a">+${fmt(e.amount)}</span>${canUndoPay(e) ? `<button class="undo" type="button" data-delpay="${esc(e.id)}">Отменить</button>` : '<span></span>'}</div>`;
@@ -159,7 +164,7 @@ function renderHistory() {
     const rb = isOwner() && !e.pending ? (e.rej ? `<button type="button" class="linkbtn rejbtn" data-unrej="${esc(e.id)}">Вернуть к выдаче</button>` : `<button type="button" class="linkbtn rejbtn" data-rej="${esc(e.id)}">Не возмещать</button>`) : '';
     return `<div class="li${e.rej ? ' rej' : ''}" data-row="${esc(e.id)}"><span style="min-width:0"><b>${esc([e.place, e.note].filter(Boolean).join(' — ') || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(catLabel(e.cat))}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small>${rj || rb ? `<small class="rejline">${rj}${rb}</small>` : ''}</span>
       <span class="a">−${fmt(e.amount)}</span>${canDel(e) && !e.pending ? `<button class="del" type="button" data-del="${esc(e.id)}" aria-label="Удалить">×</button>` : '<span></span>'}</div>`
-  }).join('') : '<div class="empty">Расходов пока нет.</div>';
+  }).join('') : `<div class="empty">${hQ.trim() ? 'Ничего не найдено.' : 'Расходов пока нет.'}</div>`;
 }
 function renderRole() {
   $('tools').hidden = !canPay();
@@ -350,6 +355,17 @@ $('roleBox').addEventListener('submit', async e => {
   } catch (e2) { err.textContent = 'Неверный пароль.'; err.hidden = false }
 });
 $('hWho').addEventListener('change', e => { hWho = e.target.value; renderHistory() });
+$('hQ').addEventListener('input', e => { hQ = e.target.value; renderHistory() });
+// поиск: каждое слово должно найтись в месте, комментарии, категории (кор./рус.), имени, сумме, дате или пометке
+function matchQ(e) {
+  const words = hQ.toLowerCase().split(/\s+/).filter(Boolean); if (!words.length) return true;
+  const d = dateOf(e), [y, m, dd] = d.split('-');
+  const hay = (e.pmt
+    ? ['выдано выдача', isAdv(e) ? 'аванс' : '', e.by, nameOf(e.staff)]
+    : [e.place, e.note, e.cat, CAT_RU[e.cat], nameOf(e.staff), e.rej ? 'не возмещается ' + e.rej : '']
+  ).concat([String(e.amount), nf(e.amount), Math.round(e.amount).toLocaleString('ru-RU'), d, `${y}.${m}.${dd}`, `${dd}.${m}`]).join(' ').toLowerCase();
+  return words.every(w => hay.includes(w));
+}
 
 // ---- Excel ----
 async function exportXlsx() {

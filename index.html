@@ -14,7 +14,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 <style>
 html,body{margin:0}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -67,7 +67,8 @@ html,body{margin:0}
 
   <details class="box" id="hist">
     <summary>История расходов</summary>
-    <div class="hfilt"><select id="hWho" aria-label="Сотрудник"></select></div>
+    <div class="hfilt"><input type="search" id="hQ" placeholder="Поиск: место, сумма, категория…" aria-label="Поиск" autocomplete="off"><select id="hWho" aria-label="Сотрудник"></select></div>
+    <p class="sub hcount" id="hCount" hidden></p>
     <div id="log"><div class="empty">Загрузка…</div></div>
   </details>
 
@@ -92,6 +93,6 @@ html,body{margin:0}
 <script src="config.js?v=2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="xlsx-book.js?v=8"></script>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
