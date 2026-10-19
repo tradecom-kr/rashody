@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Как пользоваться — Расходы</title>
+<meta name="theme-color" content="#031b95">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+html,body{margin:0}
+.doc{background:var(--surface);border-radius:18px;padding:18px 20px;box-shadow:0 1px 0 var(--line);line-height:1.55}
+.doc h2{font-size:19px;margin:0 0 10px}
+.doc h3{font-size:16px;margin:18px 0 6px}
+.doc ol,.doc ul{margin:6px 0;padding-left:22px}
+.doc li{margin:5px 0}
+.doc p{margin:6px 0}
+.doc b{font-weight:700}
+.step{display:inline-block;background:var(--accent);color:var(--accent-fg);border-radius:999px;font-size:12px;font-weight:700;padding:2px 9px;margin-right:6px;vertical-align:1px}
+.tip{background:var(--accent-soft);border-radius:12px;padding:10px 14px;font-size:14px;margin:10px 0}
+.big{display:block;text-align:center;background:var(--ink);color:#fff;text-decoration:none;font-weight:700;font-size:17px;padding:14px;border-radius:14px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.tabs button{font:inherit;font-weight:700;padding:10px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+.tabs button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.faq dt{font-weight:700;margin-top:12px}
+.faq dd{margin:4px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="brand"><img src="logo.png" alt="Tradecom Korea"><span>Как пользоваться</span></header>
+
+  <a class="big" href="./">Открыть приложение «Расходы»</a>
+
+  <section class="doc">
+    <h2><span class="step">1</span>Установите значок на телефон</h2>
+    <p>Регистрироваться нигде не нужно. Значок ставится один раз — дальше приложение открывается с экрана телефона, как обычное.</p>
+    <div class="tabs" role="group" aria-label="Телефон">
+      <button type="button" data-os="ios" aria-pressed="true">iPhone</button>
+      <button type="button" data-os="and" aria-pressed="false">Android</button>
+    </div>
+    <div data-show="ios">
+      <ol>
+        <li>Откройте ссылку <b>tradecom-kr.github.io/rashody</b> в <b>Safari</b>.</li>
+        <li>Нажмите кнопку <b>«Поделиться»</b> внизу экрана (квадрат со стрелкой вверх).</li>
+        <li>Прокрутите вниз и выберите <b>«На экран „Домой“»</b>.</li>
+        <li>Нажмите <b>«Добавить»</b>. На экране появится синий значок TRADECOM «Расходы».</li>
+      </ol>
+    </div>
+    <div data-show="and" hidden>
+      <ol>
+        <li>Откройте ссылку <b>tradecom-kr.github.io/rashody</b> в <b>Chrome</b>.</li>
+        <li>Нажмите меню <b>⋮</b> в правом верхнем углу.</li>
+        <li>Выберите <b>«Добавить на главный экран»</b> (или «Установить приложение»).</li>
+        <li>Нажмите <b>«Добавить»</b> / <b>«Установить»</b>. На экране появится значок «Расходы».</li>
+      </ol>
+    </div>
+    <div class="tip">Дальше всегда открывайте приложение <b>со значка</b>, а не из браузера.</div>
+  </section>
+
+  <section class="doc">
+    <h2><span class="step">2</span>Войдите один раз</h2>
+    <ol>
+      <li>Откройте приложение со значка.</li>
+      <li>В поле <b>«Кто вы?»</b> выберите своё имя.</li>
+      <li>Введите <b>свой пароль</b> (его выдаёт руководитель) и нажмите <b>«Войти»</b>.</li>
+    </ol>
+    <p>Телефон запомнит вас — в следующий раз пароль вводить не нужно.</p>
+  </section>
+
+  <section class="doc">
+    <h2><span class="step">3</span>Внесите расход</h2>
+    <ol>
+      <li>Проверьте <b>дату</b> — по умолчанию стоит сегодня. Если расход был раньше, выберите нужный день.</li>
+      <li>Введите <b>сумму</b> в белом поле.</li>
+      <li>Выберите <b>категорию</b>: Бензин, Еда, Транспорт или Прочее.</li>
+      <li>Если нужно, напишите <b>комментарий</b> (например, «KTX Сеул–Чхонан» или «обед с клиентом»).</li>
+      <li>Нажмите <b>«Списать»</b>. Внизу появится зелёная надпись «Списано …» — значит, всё сохранено.</li>
+    </ol>
+    <div class="tip">Вносите расход сразу, в день траты — так ничего не потеряется.</div>
+  </section>
+
+  <section class="doc">
+    <h2><span class="step">4</span>Проверьте, сколько вам должны</h2>
+    <ul>
+      <li>В блоке <b>«К выдаче»</b> у каждого сотрудника видна сумма, которую ему ещё не возместили.</li>
+      <li>Когда руководитель или бухгалтер переводит деньги, сумма «К выдаче» становится <b>0</b>.</li>
+      <li>Под суммой — остаток бюджета (если бюджет у вас есть).</li>
+    </ul>
+  </section>
+
+  <section class="doc">
+    <h2><span class="step">5</span>Исправьте ошибку</h2>
+    <ol>
+      <li>Внизу откройте <b>«История расходов»</b>.</li>
+      <li>У своей записи нажмите <b>×</b>, затем <b>«Удалить?»</b>.</li>
+      <li>Если нужно — внесите расход заново с правильной суммой или датой.</li>
+    </ol>
+    <p>Удалять можно только <b>свои</b> записи.</p>
+  </section>
+
+  <section class="doc">
+    <h2>Частые вопросы</h2>
+    <dl class="faq">
+      <dt>Забыл пароль</dt>
+      <dd>Обратитесь к руководителю — он задаст новый.</dd>
+      <dt>Написано «Неверный пароль»</dt>
+      <dd>Проверьте раскладку и регистр букв. Если руководитель сменил пароль — введите новый.</dd>
+      <dt>Написано «Нет связи с таблицей»</dt>
+      <dd>Проверьте интернет и потяните экран вниз, чтобы обновить. Без интернета расход не сохранится.</dd>
+      <dt>Не вижу своего имени в списке</dt>
+      <dd>Обновите страницу. Если имени всё равно нет — сообщите руководителю.</dd>
+      <dt>Сменил телефон</dt>
+      <dd>Установите значок заново (шаг 1) и войдите со своим паролем (шаг 2). Все ваши записи сохранены.</dd>
+    </dl>
+  </section>
+
+  <a class="big" href="./">Открыть приложение «Расходы»</a>
+  <p class="sub" style="text-align:center">TRADECOM KOREA</p>
+</div>
+<script>
+document.querySelectorAll('[data-os]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-os]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+  document.querySelectorAll('[data-show]').forEach(s=>s.hidden=s.dataset.show!==b.dataset.os);
+}));
+if(/Android/i.test(navigator.userAgent))document.querySelector('[data-os="and"]').click();
+</script>
+</body>
+</html>
