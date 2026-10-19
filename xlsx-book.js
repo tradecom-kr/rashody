@@ -167,3 +167,40 @@ function weeklyLedger(){
   }
   return weeks.reverse(); // новые недели сверху
 }
+
+// Отчёт по форме «현금 지출 현황 - ГГГГ년» (как в шаблоне налоговой). 잔액 оставляем пустым.
+function buildTaxBook(X, year, rows){
+  const thin={style:'thin',color:{rgb:'000000'}}, dbl={style:'double',color:{rgb:'000000'}};
+  const B=(left)=>({top:thin,bottom:thin,right:thin,left:left||thin});
+  const f=(o)=>Object.assign({name:'맑은 고딕',sz:10,color:{rgb:'000000'}},o||{});
+  const num='_-* #,##0_-;\\-* #,##0_-;_-* "-"_-;_-@_-';
+  const S={
+    title:{font:f({sz:14,bold:true}),alignment:{horizontal:'center',vertical:'center'}},
+    warn:{font:f({bold:true,sz:9}),fill:{fgColor:{rgb:'FFFF00'}},alignment:{horizontal:'center',vertical:'center',wrapText:true}},
+    head:{font:f({bold:true}),fill:{fgColor:{rgb:'D9D9D9'}},alignment:{horizontal:'center',vertical:'center'},border:B()},
+    date:{font:f(),numFmt:'mm"월" dd"일"',alignment:{horizontal:'center',vertical:'center'},border:B(dbl)},
+    text:{font:f(),alignment:{horizontal:'left',vertical:'center',wrapText:true},border:B()},
+    num:{font:f(),numFmt:num,alignment:{horizontal:'center',vertical:'center'},border:B()},
+    memo:{font:f(),alignment:{vertical:'center',wrapText:true},border:B()},
+    tot:{font:f({bold:true}),fill:{fgColor:{rgb:'F2F2F2'}},numFmt:num,alignment:{horizontal:'center',vertical:'center'},border:B()},
+    totL:{font:f({bold:true}),fill:{fgColor:{rgb:'F2F2F2'}},alignment:{horizontal:'center',vertical:'center'},border:B(dbl)},
+  };
+  const ws={}, put=(r,c,v,s,t)=>{ws[X.utils.encode_cell({r,c})]={v,t:t||(typeof v==='number'?'n':'s'),s}};
+  put(0,0,`현금 지출 현황 - ${year}년 `,S.title); for(let c=1;c<6;c++)put(0,c,'',{});
+  put(1,0,'영수증등 증빙은 필히 보관하시고 3만원 초과분은 현금영수증, 개인카드사용만 가산세 면제(법인카드,법인사업자현금영수증은 표기 하지 마세요)',S.warn); for(let c=1;c<6;c++)put(1,c,'',S.warn);
+  ['일자','상 호 외','내역','지출','잔액','비고'].forEach((h,c)=>put(2,c,h,S.head));
+  let r=3;
+  rows.forEach(x=>{
+    put(r,0,x.date,S.date,'n'); put(r,1,x.place,S.text); put(r,2,x.detail,S.text);
+    put(r,3,x.amount,S.num); put(r,4,'',S.num); put(r,5,x.memo,S.memo); r++;
+  });
+  const minRows=Math.max(r,56);                // пустые строки с рамками, как в шаблоне
+  for(;r<minRows;r++){ put(r,0,'',S.date); put(r,1,'',S.text); put(r,2,'',S.text); put(r,3,'',S.num); put(r,4,'',S.num); put(r,5,'',S.memo); }
+  put(r,0,'합계',S.totL); put(r,1,'',S.tot); put(r,2,'',S.tot);
+  put(r,3,rows.reduce((a,x)=>a+x.amount,0),S.tot); put(r,4,'',S.tot); put(r,5,'',S.tot); r++;
+  ws['!ref']=X.utils.encode_range({s:{r:0,c:0},e:{r:r-1,c:5}});
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}}];
+  ws['!cols']=[{wch:9.6},{wch:16.5},{wch:33.7},{wch:12.2},{wch:14.5},{wch:29.9}];
+  ws['!rows']=[{hpt:24},{hpt:30},{hpt:20}];
+  const wb=X.utils.book_new(); X.utils.book_append_sheet(wb,ws,`현금-${year}년`); return wb;
+}

@@ -127,7 +127,7 @@ function renderHistory() {
   $('log').innerHTML = list.length ? list.map(e => {
     if (e.pmt) return `<div class="li pmt"><span style="min-width:0"><b>Выдано</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.by || 'выдача')}</small></span>
       <span class="a">+${fmt(e.amount)}</span>${canUndoPay(e) ? `<button class="undo" type="button" data-delpay="${esc(e.id)}">Отменить</button>` : '<span></span>'}</div>`;
-    return `<div class="li"><span style="min-width:0"><b>${esc(e.note || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.cat)}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small></span>
+    return `<div class="li"><span style="min-width:0"><b>${esc([e.place, e.note].filter(Boolean).join(' — ') || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.cat)}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small></span>
       <span class="a">−${fmt(e.amount)}</span>${canDel(e) && !e.pending ? `<button class="del" type="button" data-del="${esc(e.id)}" aria-label="Удалить">×</button>` : '<span></span>'}</div>`
   }).join('') : '<div class="empty">Расходов пока нет.</div>';
 }
@@ -138,7 +138,7 @@ function renderRole() {
     ? `<span>Вы вошли как бухгалтер</span><button type="button" class="linkbtn" id="roleOut">Выйти</button>`
     : `<button type="button" class="linkbtn" id="roleOpen">Вход для бухгалтера</button>`;
 }
-function render() { renderForm(); renderSummary(); renderHistory(); renderRole() }
+function render() { renderForm(); renderSummary(); renderHistory(); renderRole(); renderTaxYears() }
 
 // ---- ввод расхода ----
 const amt = $('amount');
@@ -206,14 +206,14 @@ $('form').addEventListener('submit', async e => {
   if (!a) { msg('Введите сумму.', 'err'); amt.focus(); return }
   if (a > 100000000) { msg('Сумма слишком большая — проверьте, нет ли лишних нулей.', 'err'); return }
   if (date > isoDay(0)) { msg('Дата не может быть в будущем.', 'err'); return }
-  const note = $('note').value.trim();
+  const note = $('note').value.trim(), place = $('place').value.trim();
   const clientId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const local = { id: clientId, date, staff: who.id, cat, amount: a, note, created: Date.now() };
-  const payload = Object.assign({ cat, amount: a, date, note, clientId }, authFor(who.id), { staff: who.id });
+  const local = { id: clientId, date, staff: who.id, cat, amount: a, note, place, created: Date.now() };
+  const payload = Object.assign({ cat, amount: a, date, note, place, clientId }, authFor(who.id), { staff: who.id });
   setQueue(getQueue().concat([{ payload, local }]));
   expenses.push(Object.assign({}, local, { pending: true }));
   msg(`Списано ${fmt(a)} · ${cat} · ${who.name} · ${dmy(date)} · сохраняется…`, 'ok'); $('msg').dataset.pid = clientId;
-  amt.value = ''; $('note').value = ''; render();
+  amt.value = ''; $('note').value = ''; $('place').value = ''; render();
   flush();
 });
 
@@ -315,6 +315,42 @@ async function exportXlsx() {
   } catch (err) { lm('Не удалось собрать файл.', 'err') }
 }
 $('dlLedger').addEventListener('click', exportXlsx);
+
+// ---- Отчёт для налоговой: 현금 지출 현황 по году ----
+const CAT_KO = { 'Бензин': '주유비', 'Еда': '식대', 'Транспорт': '교통비', 'Прочее': '기타' };
+function renderTaxYears() {
+  const ys = [...new Set(expenses.map(e => dateOf(e).slice(0, 4)).concat([isoDay(0).slice(0, 4)]))].sort().reverse();
+  const sel = $('taxYear'), cur = sel.value || ys[0];
+  if (sel.dataset.sig !== ys.join()) { sel.innerHTML = ys.map(y => `<option value="${y}">${y}</option>`).join(''); sel.dataset.sig = ys.join('') }
+  sel.value = ys.includes(cur) ? cur : ys[0];
+}
+async function exportTax() {
+  const lm = (t, k) => { $('lgMsg').className = 'msg ' + k; $('lgMsg').textContent = t };
+  if (!canPay()) return;
+  if (typeof XLSX === 'undefined') { lm('Не загрузился модуль Excel. Обновите страницу.', 'err'); return }
+  await load(true);
+  const year = $('taxYear').value || isoDay(0).slice(0, 4);
+  const ser = iso => { const [y, m, d] = iso.split('-').map(Number); return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 864e5 };
+  const rows = expenses.filter(e => dateOf(e).startsWith(year + '-'))
+    .sort((a, b) => dateOf(a).localeCompare(dateOf(b)) || (a.created || 0) - (b.created || 0))
+    .map(e => ({ date: ser(dateOf(e)), place: e.place || '', detail: [CAT_KO[e.cat] || e.cat, e.note].filter(Boolean).join(' - '), amount: e.amount, memo: nameOf(e.staff) }));
+  try {
+    const buf = XLSX.write(buildTaxBook(XLSX, year, rows), { bookType: 'xlsx', type: 'array' });
+    await saveFile(buf, `현금지출현황_${year}.xlsx`);
+    lm(`Отчёт за ${year} готов: ${rows.length} записей.`, 'ok');
+  } catch (err) { lm('Не удалось собрать отчёт.', 'err') }
+}
+async function saveFile(buf, name) {
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const file = new File([blob], name, { type: blob.type });
+  if (navigator.canShare && navigator.canShare({ files: [file] }) && /iPhone|iPad|Android/i.test(navigator.userAgent)) {
+    await navigator.share({ files: [file], title: name }).catch(() => {});
+  } else {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove() }, 2000);
+  }
+}
+$('dlTax').addEventListener('click', exportTax);
 
 // ---- запуск и автообновление ----
 render(); load().then(flush);

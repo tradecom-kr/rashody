@@ -11,7 +11,7 @@ var SALT = 'rashody-komandy-v1';
 var SH = { staff: 'Сотрудники', exp: 'Расходы', pay: 'Выдачи', set: 'Настройки' };
 var HEAD = {
   staff: ['ID', 'Имя', 'Бюджет', 'Пароль', 'Порядок', 'Скрыт', 'Хеш пароля'],
-  exp:   ['ID', 'Дата', 'ID сотрудника', 'Сотрудник', 'Категория', 'Сумма', 'Комментарий', 'Внесено'],
+  exp:   ['ID', 'Дата', 'ID сотрудника', 'Сотрудник', 'Категория', 'Сумма', 'Комментарий', 'Внесено', 'Место'],
   pay:   ['ID', 'Дата', 'ID сотрудника', 'Сотрудник', 'Сумма', 'Кто отметил', 'Внесено']
 };
 var DEFAULT_CATS = 'Бензин, Еда, Транспорт, Прочее';
@@ -70,6 +70,14 @@ function sheet_(key) {
       sh.setFrozenRows(1);
     }
   }
+  return sh;
+}
+
+// добавить недостающие столбцы в шапку (например «Место» в старой таблице)
+function ensureHead_(key) {
+  var sh = sheet_(key), want = HEAD[key]; if (!want) return sh;
+  var have = sh.getLastColumn() ? sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0] : [];
+  if (have.length < want.length) sh.getRange(1, 1, 1, want.length).setValues([want]).setFontWeight('bold').setBackground('#E7E6E6');
   return sh;
 }
 
@@ -138,7 +146,7 @@ function readAll_() {
     cats: cats,
     expenses: rows_('exp').map(function (r) {
       return { id: String(r['ID']), date: iso_(r['Дата']), staff: String(r['ID сотрудника']), cat: String(r['Категория'] || ''),
-               amount: num_(r['Сумма']), note: String(r['Комментарий'] || ''), created: r['Внесено'] instanceof Date ? r['Внесено'].getTime() : 0 };
+               amount: num_(r['Сумма']), note: String(r['Комментарий'] || ''), place: String(r['Место'] || ''), created: r['Внесено'] instanceof Date ? r['Внесено'].getTime() : 0 };
     }).filter(function (e) { return e.amount > 0; }),
     payments: rows_('pay').map(function (r) {
       return { id: String(r['ID']), date: iso_(r['Дата']), staff: String(r['ID сотрудника']), amount: num_(r['Сумма']),
@@ -193,12 +201,13 @@ function add_(req) {
   if (date > today) fail_('Дата не может быть в будущем.');
   var cat = String(req.cat || '').slice(0, 40);
   var note = String(req.note || '').slice(0, 120);
+  var place = String(req.place || '').slice(0, 80);
   // ID приходит с телефона: если связь оборвалась и запрос повторили — дубль не создаётся
   var cid = String(req.clientId || '');
   var id = /^[A-Za-z0-9_-]{8,40}$/.test(cid) ? cid : newId_();
   if (cid && rows_('exp').some(function (r) { return String(r['ID']) === id; })) return { ok: true, id: id, dup: true };
-  var sh = sheet_('exp');
-  sh.appendRow([id, dateCell_(date), s.id, s.name, cat, amount, note, new Date()]);
+  var sh = ensureHead_('exp');
+  sh.appendRow([id, dateCell_(date), s.id, s.name, cat, amount, note, new Date(), place]);
   var r = sh.getLastRow();
   sh.getRange(r, 2).setNumberFormat('yyyy.mm.dd');
   sh.getRange(r, 6).setNumberFormat('#,##0');
