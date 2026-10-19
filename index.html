@@ -48,8 +48,10 @@ html,body{margin:0}
       <span class="amt-cur">₩</span>
     </div>
     <div class="cats" id="cats" role="group" aria-label="Категория"></div>
-    <input class="note" id="place" maxlength="80" placeholder="Где (название места, например GS칼텍스)" autocomplete="off">
-    <input class="note" id="note" maxlength="120" placeholder="Комментарий (необязательно)" autocomplete="off">
+    <label class="amt-cap" for="place">Где потратили</label>
+    <input class="note" id="place" maxlength="80" placeholder="Название места, например GS칼텍스" autocomplete="off">
+    <label class="amt-cap" for="note">Комментарий (необязательно)</label>
+    <input class="note" id="note" maxlength="120" placeholder="Например: поездка к клиенту" autocomplete="off">
     <button class="go" id="go" type="submit">Списать</button>
     <p class="msg" id="msg"></p>
   </form>
