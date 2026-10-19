@@ -82,6 +82,14 @@ const spentBy = id => expenses.filter(e => e.staff === id).reduce((a, e) => a + 
 const nameOf = id => { const s = allStaff.find(x => x.id === id); return s ? s.name : '—' };
 
 // ---- отрисовка ----
+// цвет категории: [выбрана, фон, текст] — спокойные оттенки
+const CAT_COLORS = {
+  'Бензин': ['#c26a1b', '#fbeedf', '#8a4a10'],
+  'Еда': ['#2f8a57', '#e4f3ea', '#1f6b41'],
+  'Транспорт': ['#2f63c8', '#e5edfb', '#1f4a9c'],
+  'Прочее': ['#6b6f78', '#eceef1', '#4a4d54']
+};
+const CAT_FALLBACK = [['#8a5cc2', '#efe8f8', '#5f3b8f'], ['#b8456b', '#f8e6ec', '#8a2f4f']];
 const AVC = ['#031b95', '#404040', '#2f4fd0', '#6b6e75', '#14309f', '#55575c', '#4561d8'];
 const initials = n => String(n).split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
@@ -97,7 +105,8 @@ function renderForm() {
   $('pinRow').hidden = !need;
   if (!need) $('pinErr').hidden = true;
   $('cats').style.gridTemplateColumns = `repeat(${Math.min(cats.length, 4) || 1},minmax(0,1fr))`;
-  $('cats').innerHTML = cats.map(c => `<button type="button" data-cat="${esc(c)}" aria-pressed="${c === cat}">${esc(c)}</button>`).join('');
+  $('cats').innerHTML = cats.map((c, i) => { const k = CAT_COLORS[c] || CAT_FALLBACK[i % CAT_FALLBACK.length];
+    return `<button type="button" data-cat="${esc(c)}" aria-pressed="${c === cat}" style="--c:${k[0]};--c-soft:${k[1]};--c-ink:${k[2]}">${esc(c)}</button>` }).join('');
 }
 function renderSummary() {
   $('wkSub').textContent = canPay() ? 'После перевода нажмите «Выдать» и подтвердите — сумма к выдаче станет 0.' : '«К выдаче» — сколько ещё не возмещено сотруднику.';

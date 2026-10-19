@@ -1,6 +1,6 @@
 /* Layout: одна колонка. Тёмная «карта» сверху — ввод расхода; ниже карточки сотрудников с суммой к выдаче */
 :root{
-  --bg:#f1f2f4; --surface:#ffffff; --fg:#1d1f24; --muted:#62666f; --line:#dfe1e5;
+  --bg:#f1f2f4; --surface:#ffffff; --field:#f7f8fa; --fg:#1d1f24; --muted:#62666f; --line:#dfe1e5;
   --ink:#031b95; --ink-2:rgba(255,255,255,.13); --ink-fg:#ffffff; --ink-muted:#b8c1ec;
   --accent:#031b95; --accent-fg:#ffffff; --accent-soft:#e3e7f8; --gray:#404040;
   --bad:#c2412d; --bad-soft:#fbe6e2; --ok:#1f8a5b; --ok-soft:#e1f3ea;
@@ -8,12 +8,12 @@
   --font-num:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#121316; --surface:#1c1d21; --fg:#ebecef; --muted:#9da1aa; --line:#2d2f34;
+  --bg:#121316; --surface:#1c1d21; --field:#25272c; --fg:#ebecef; --muted:#9da1aa; --line:#2d2f34;
   --ink:#13289e; --ink-2:rgba(255,255,255,.12); --ink-fg:#ffffff; --ink-muted:#b8c1ec;
   --accent:#5b74f0; --accent-fg:#ffffff; --accent-soft:#1d2550; --gray:#8a8c91;
   --bad:#f08a78; --bad-soft:#3a1f1b; --ok:#5fd09a; --ok-soft:#173326; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#121316; --surface:#1c1d21; --fg:#ebecef; --muted:#9da1aa; --line:#2d2f34;
+  --bg:#121316; --surface:#1c1d21; --field:#25272c; --fg:#ebecef; --muted:#9da1aa; --line:#2d2f34;
   --ink:#13289e; --ink-2:rgba(255,255,255,.12); --ink-fg:#ffffff; --ink-muted:#b8c1ec;
   --accent:#5b74f0; --accent-fg:#ffffff; --accent-soft:#1d2550; --gray:#8a8c91;
   --bad:#f08a78; --bad-soft:#3a1f1b; --ok:#5fd09a; --ok-soft:#173326; color-scheme:dark}
@@ -33,33 +33,30 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .sub{font-size:13px;color:var(--muted);margin:0}
 
 /* Ввод — тёмная карта */
-.hero{background:var(--ink);color:var(--ink-fg);border-radius:22px;padding:18px;display:flex;flex-direction:column;gap:14px;color-scheme:dark;box-shadow:0 12px 30px -18px rgba(3,27,149,.7)}
-.hero .msg{color:var(--ink-muted)} .hero .msg.ok{color:#8fe3b8} .hero .msg.err{color:#ffb4a6}
+.hero{background:var(--surface);color:var(--fg);border-radius:22px;padding:18px;display:flex;flex-direction:column;gap:14px;box-shadow:0 1px 0 var(--line),0 10px 28px -20px rgba(20,28,60,.35);border-top:4px solid var(--accent)}
+.hero .msg{color:var(--muted)} .hero .msg.ok{color:var(--ok)} .hero .msg.err{color:var(--bad)}
 .pair{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px}
-.pill{font:inherit;font-size:15px;font-weight:600;padding:11px 14px;border-radius:999px;border:0;background:var(--ink-2);color:var(--ink-fg);width:100%;min-width:0;appearance:none;-webkit-appearance:none}
-select.pill{background-image:linear-gradient(45deg,transparent 50%,var(--ink-muted) 50%),linear-gradient(135deg,var(--ink-muted) 50%,transparent 50%);background-position:calc(100% - 18px) 52%,calc(100% - 13px) 52%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
+.pill{font:inherit;font-size:15px;font-weight:600;padding:11px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--field);color:var(--fg);width:100%;min-width:0;appearance:none;-webkit-appearance:none}
+select.pill{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 52%,calc(100% - 13px) 52%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
 /* выпадающий список: тёмный текст на светлом фоне, иначе на Windows пункты не видны */
 select.pill option{color:#1d1f24;background:#ffffff;font-weight:500}
 input[type=date].pill{font-family:var(--font-body);font-size:15px}
 .pin-row{display:flex;gap:8px}
 .pin-row .pill{letter-spacing:.15em}
-.amt-cap{font-size:13px;color:var(--ink-muted);font-weight:600;margin-bottom:-8px;padding-left:4px}
-.amt-wrap{display:flex;align-items:center;background:var(--ink-fg);border-radius:16px;padding:0 16px;box-shadow:inset 0 0 0 2px transparent}
-.amt-wrap:focus-within{box-shadow:inset 0 0 0 3px #8fa2ff}
-.amt{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font-family:var(--font-num);font-size:34px;font-weight:700;text-align:right;padding:14px 8px 14px 0;letter-spacing:-.02em}
+.amt-cap{font-size:13px;color:var(--muted);font-weight:600;margin-bottom:-8px;padding-left:4px}
+.amt-wrap{display:flex;align-items:center;background:var(--field);border:1.5px solid var(--line);border-radius:16px;padding:0 16px}
+.amt-wrap:focus-within,.note:focus,.pill:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.amt{flex:1;min-width:0;border:0;background:transparent;color:var(--fg);font-family:var(--font-num);font-size:34px;font-weight:700;text-align:right;padding:14px 8px 14px 0;letter-spacing:-.02em}
 .amt:focus{outline:none}
-.amt::placeholder{color:#8a90a8;font-family:var(--font-body);font-size:20px;font-weight:500;letter-spacing:0;text-align:center}
-.amt-cur{font-family:var(--font-num);font-size:26px;font-weight:700;color:var(--ink)}
+.amt::placeholder{color:var(--muted);opacity:.7;font-family:var(--font-body);font-size:20px;font-weight:500;letter-spacing:0;text-align:center}
+.amt-cur{font-family:var(--font-num);font-size:26px;font-weight:700;color:var(--muted)}
 .cats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-.cats button{background:var(--ink-2);border:0;border-radius:12px;padding:12px 4px;font-size:14px;font-weight:600;color:var(--ink-fg);min-width:0;line-height:1.2}
-.cats button[aria-pressed="true"]{background:var(--ink-fg);color:var(--ink)}
-.note{font:inherit;font-size:15px;padding:12px 14px;border-radius:12px;border:0;background:#ffffff;color:#1d1f24;width:100%}
-.note::placeholder{color:#8a90a8}
-.note:focus{outline:none;box-shadow:inset 0 0 0 3px #8fa2ff}
-.go{background:var(--ink-fg);color:var(--ink);border:0;border-radius:14px;padding:15px;font-size:18px;font-weight:700}
+.cats button{background:var(--c-soft,var(--field));border:1.5px solid transparent;border-radius:12px;padding:12px 4px;font-size:14px;font-weight:600;color:var(--c-ink,var(--fg));min-width:0;line-height:1.2}
+.cats button[aria-pressed="true"]{background:var(--c,var(--accent));color:#fff;border-color:var(--c,var(--accent))}
+.note{font:inherit;font-size:15px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--field);color:var(--fg);width:100%}
+.note::placeholder{color:var(--muted);opacity:.8}
+.go{background:var(--accent);color:#fff;border:0;border-radius:14px;padding:15px;font-size:18px;font-weight:700}
 .go:disabled{opacity:.45;cursor:not-allowed}
-.hero .tubtn{background:var(--ink-fg);color:var(--ink)}
-.hero :focus-visible{outline-color:#fff}
 .tubtn{background:var(--accent);color:var(--accent-fg);border:0;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:700}
 
 /* Шапка с логотипом */
@@ -124,3 +121,6 @@ details.box>summary{cursor:pointer;font-weight:700}
 .linkbtn{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;font-size:13px}
 .reqacc{font-size:13px;color:var(--muted);text-align:center}
 @media (max-width:380px){.amt{font-size:28px}.cats button{font-size:13px}}
+/* тёмная тема: категории — приглушённые оттенки */
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .cats button:not([aria-pressed="true"]){background:color-mix(in srgb,var(--c) 24%,var(--surface));color:#e9ebf0}}
+:root[data-theme="dark"] .cats button:not([aria-pressed="true"]){background:color-mix(in srgb,var(--c) 24%,var(--surface));color:#e9ebf0}
