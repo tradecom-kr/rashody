@@ -131,17 +131,18 @@ function buildBook(X, d){
   // ---- Лист 3: Выдачи ----
   {
     const ws={}; let r=0;
-    ['Дата','Сотрудник','Выдано, ₩'].forEach((h,c)=>put(ws,r,c,cell(h,S.head))); r++;
+    ['Дата','Сотрудник','Выдано, ₩','Вид'].forEach((h,c)=>put(ws,r,c,cell(h,S.head))); r++;
     d.payments.forEach((p,k)=>{
       put(ws,r,0,cell(p.date,zebra(S.date,k),'n'));
       put(ws,r,1,cell(p.name,zebra(S.text,k)));
       put(ws,r,2,cell(p.amount,zebra(S.num,k)));
+      put(ws,r,3,cell(p.adv?'Аванс':'Возмещение',zebra(S.text,k)));
       r++;
     });
     put(ws,r,0,cell('Итого',S.totalL));put(ws,r,1,cell('',S.totalL));
-    put(ws,r,2,cell(d.payments.reduce((a,p)=>a+p.amount,0),S.total)); r++;
-    finish(ws,r,3,0);
-    ws['!cols']=[{wch:12},{wch:18},{wch:14}];
+    put(ws,r,2,cell(d.payments.reduce((a,p)=>a+p.amount,0),S.total));put(ws,r,3,cell('',S.totalL)); r++;
+    finish(ws,r,4,0);
+    ws['!cols']=[{wch:12},{wch:18},{wch:14},{wch:14}];
     X.utils.book_append_sheet(wb,ws,'Выдачи');
   }
   return wb;
@@ -159,7 +160,7 @@ function weeklyLedger(){
     const isCur=from===isoOf(cur.getTime()), rows=[];
     for(const s of staff){
       const spent=expenses.filter(e=>e.staff===s.id&&!e.rej&&dateOf(e)>=from&&dateOf(e)<=to).reduce((a,e)=>a+e.amount,0);
-      const ps=payments.filter(p=>p.staff===s.id&&p.date>=from&&p.date<=to);
+      const ps=payments.filter(p=>p.staff===s.id&&!isAdv(p)&&p.date>=from&&p.date<=to);
       const paid=ps.reduce((a,p)=>a+p.amount,0);
       const c=carry[s.id]||0, total=c+spent, rest=total-paid;
       carry[s.id]=rest;

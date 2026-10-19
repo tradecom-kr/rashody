@@ -133,3 +133,4 @@ details.box>summary{cursor:pointer;font-weight:700}
 .rejbtn{font-size:12px}
 .rejform{display:flex;gap:8px;align-items:center;padding:8px 0 10px;border-bottom:1px solid var(--line)}
 .rejform input{font:inherit;font-size:15px;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--fg);min-width:0;flex:1}
+.li.pmt.adv .a{color:var(--muted)}

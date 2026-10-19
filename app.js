@@ -78,7 +78,9 @@ function canDel(e) { if (isOwner()) return true; const c = current(); return !!c
 const counts = e => !e.rej;   // расход «Не возмещается» не идёт в выдачу, ведомость и отчёт
 const canUndoPay = p => isOwner();
 function authFor(staffId) { return isOwner() ? { rolePass } : { staff: staffId, pin: pinOf(staffId) } }
-const paidBy = id => payments.filter(p => p.staff === id).reduce((a, p) => a + p.amount, 0);
+// «Аванс» в столбце «Кто отметил» — подотчётные деньги на руках, не возмещение расходов: в «К выдаче» не идёт
+const isAdv = p => /^аванс/i.test(String(p.by || '').trim());
+const paidBy = id => payments.filter(p => p.staff === id && !isAdv(p)).reduce((a, p) => a + p.amount, 0);
 const spentBy = id => expenses.filter(e => e.staff === id && counts(e)).reduce((a, e) => a + e.amount, 0);
 const nameOf = id => { const s = allStaff.find(x => x.id === id); return s ? s.name : '—' };
 
@@ -151,7 +153,7 @@ function renderHistory() {
     .filter(e => hWho === 'all' || e.staff === hWho)
     .sort((a, b) => dateOf(b).localeCompare(dateOf(a)) || (b.created || 0) - (a.created || 0)).slice(0, 300);
   $('log').innerHTML = list.length ? list.map(e => {
-    if (e.pmt) return `<div class="li pmt"><span style="min-width:0"><b>Выдано</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.by || 'выдача')}</small></span>
+    if (e.pmt) return `<div class="li pmt${isAdv(e) ? ' adv' : ''}"><span style="min-width:0"><b>${isAdv(e) ? 'Аванс (на руки)' : 'Выдано'}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.by || 'выдача')}</small></span>
       <span class="a">+${fmt(e.amount)}</span>${canUndoPay(e) ? `<button class="undo" type="button" data-delpay="${esc(e.id)}">Отменить</button>` : '<span></span>'}</div>`;
     const rj = e.rej ? `<span class="rejtag">Не возмещается: ${esc(e.rej)}</span>` : '';
     const rb = isOwner() && !e.pending ? (e.rej ? `<button type="button" class="linkbtn rejbtn" data-unrej="${esc(e.id)}">Вернуть к выдаче</button>` : `<button type="button" class="linkbtn rejbtn" data-rej="${esc(e.id)}">Не возмещать</button>`) : '';
@@ -360,7 +362,7 @@ async function exportXlsx() {
     today: dmy(isoDay(0)),
     staff: staff.map(s => { const sp = spentBy(s.id), pd = paidBy(s.id); return { name: s.name, budget: s.budget, spent: sp, paid: pd, due: sp - pd } }),
     expenses: expenses.slice().sort((a, b) => dateOf(a).localeCompare(dateOf(b)) || (a.created || 0) - (b.created || 0)).map(e => ({ date: ser(dateOf(e)), name: nameOf(e.staff), cat: e.cat, amount: e.amount, note: e.note || '', rej: e.rej || '' })),
-    payments: payments.slice().sort((a, b) => (a.created || 0) - (b.created || 0)).map(p => ({ date: ser(p.date), name: nameOf(p.staff), amount: p.amount }))
+    payments: payments.slice().sort((a, b) => (a.created || 0) - (b.created || 0)).map(p => ({ date: ser(p.date), name: nameOf(p.staff), amount: p.amount, adv: isAdv(p) }))
   };
   data.weeks = weeklyLedger();
   try {
