@@ -51,7 +51,9 @@ input[type=date].pill{font-family:var(--font-body);font-size:15px}
 .amt::placeholder{color:var(--muted);opacity:.7;font-family:var(--font-body);font-size:20px;font-weight:500;letter-spacing:0;text-align:center}
 .amt-cur{font-family:var(--font-num);font-size:26px;font-weight:700;color:var(--muted)}
 .cats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-.cats button{background:var(--c-soft,var(--field));border:1.5px solid transparent;border-radius:12px;padding:12px 4px;font-size:14px;font-weight:600;color:var(--c-ink,var(--fg));min-width:0;line-height:1.2}
+.cats button{background:var(--c-soft,var(--field));border:1.5px solid transparent;border-radius:12px;padding:9px 4px;font-size:15px;font-weight:600;color:var(--c-ink,var(--fg));min-width:0;line-height:1.2;display:flex;flex-direction:column;align-items:center;gap:2px}
+.cats button b{font-weight:700}
+.cats button small{font-size:11px;font-weight:500;opacity:.85}
 .cats button[aria-pressed="true"]{background:var(--c,var(--accent));color:#fff;border-color:var(--c,var(--accent))}
 .note{font:inherit;font-size:15px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--field);color:var(--fg);width:100%}
 .note::placeholder{color:var(--muted);opacity:.8}

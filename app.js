@@ -49,9 +49,9 @@ async function load(quiet) {
     if (!j.ok) throw new Error(j.error);
     const d = j.data;
     allStaff = d.staff; staff = allStaff.filter(s => !s.hidden);
-    cats = d.cats.length ? d.cats : ['Бензин', 'Еда', 'Транспорт', 'Прочее'];
+    cats = [...new Set((d.cats.length ? d.cats : DEFAULT_CATS).map(normCat))];
     if (inflight > 0) return;              // идёт сохранение — свежие данные возьмём в следующий раз
-    expenses = d.expenses; payments = d.payments;
+    expenses = d.expenses.map(e => Object.assign(e, { cat: normCat(e.cat) })); payments = d.payments;
     mergePending();
     if (me && !staff.some(s => s.id === me)) { me = ''; ls.set('me', '') }
     if (!cats.includes(cat)) cat = cats[0];
@@ -84,11 +84,24 @@ const nameOf = id => { const s = allStaff.find(x => x.id === id); return s ? s.n
 // ---- отрисовка ----
 // цвет категории: [выбрана, фон, текст] — спокойные оттенки
 const CAT_COLORS = {
-  'Бензин': ['#c26a1b', '#fbeedf', '#8a4a10'],
-  'Еда': ['#2f8a57', '#e4f3ea', '#1f6b41'],
-  'Транспорт': ['#2f63c8', '#e5edfb', '#1f4a9c'],
-  'Прочее': ['#6b6f78', '#eceef1', '#4a4d54']
+  '주유비': ['#c26a1b', '#fbeedf', '#8a4a10'],
+  '식대': ['#2f8a57', '#e4f3ea', '#1f6b41'],
+  '교통비': ['#2f63c8', '#e5edfb', '#1f4a9c'],
+  '하이패스': ['#2a8a99', '#e2f3f5', '#1d6470'],
+  '택배비': ['#a8762a', '#f6eedf', '#7a5418'],
+  '차량정비': ['#b04a3c', '#f8e7e4', '#86352a'],
+  '접대': ['#8a5cc2', '#efe8f8', '#5f3b8f'],
+  '사무용품': ['#5b6fa8', '#e9ecf6', '#3f4f7d'],
+  '기타': ['#6b6f78', '#eceef1', '#4a4d54']
 };
+// перевод категорий — только для экрана (в Excel и отчётах остаётся корейский)
+const CAT_RU = { '주유비': 'Бензин', '식대': 'Еда', '교통비': 'Транспорт', '하이패스': 'Платная дорога', '택배비': 'Почта, доставка',
+  '차량정비': 'Ремонт авто', '접대': 'Представительские', '사무용품': 'Канцтовары', '기타': 'Прочее' };
+// старые русские названия → корейские
+const CAT_ALIAS = { 'Бензин': '주유비', 'Еда': '식대', 'Транспорт': '교통비', 'Прочее': '기타' };
+const DEFAULT_CATS = ['주유비', '식대', '교통비', '하이패스', '택배비', '차량정비', '접대', '사무용품', '기타'];
+const normCat = c => CAT_ALIAS[c] || c;
+const catLabel = c => CAT_RU[c] ? `${c} · ${CAT_RU[c]}` : c;
 const CAT_FALLBACK = [['#8a5cc2', '#efe8f8', '#5f3b8f'], ['#b8456b', '#f8e6ec', '#8a2f4f']];
 const AVC = ['#031b95', '#404040', '#2f4fd0', '#6b6e75', '#14309f', '#55575c', '#4561d8'];
 const initials = n => String(n).split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
@@ -107,9 +120,9 @@ function renderForm() {
   if (cs) $('meName').textContent = `Вы вошли как ${cs.name}`;
   $('pinRow').hidden = !need;
   if (!need) $('pinErr').hidden = true;
-  $('cats').style.gridTemplateColumns = `repeat(${Math.min(cats.length, 4) || 1},minmax(0,1fr))`;
+  $('cats').style.gridTemplateColumns = `repeat(${cats.length > 4 ? 3 : (cats.length || 1)},minmax(0,1fr))`;
   $('cats').innerHTML = cats.map((c, i) => { const k = CAT_COLORS[c] || CAT_FALLBACK[i % CAT_FALLBACK.length];
-    return `<button type="button" data-cat="${esc(c)}" aria-pressed="${c === cat}" style="--c:${k[0]};--c-soft:${k[1]};--c-ink:${k[2]}">${esc(c)}</button>` }).join('');
+    return `<button type="button" data-cat="${esc(c)}" aria-pressed="${c === cat}" style="--c:${k[0]};--c-soft:${k[1]};--c-ink:${k[2]}"><b>${esc(c)}</b>${CAT_RU[c] ? `<small>${esc(CAT_RU[c])}</small>` : ''}</button>` }).join('');
 }
 function renderSummary() {
   $('wkSub').textContent = canPay() ? 'После перевода нажмите «Выдать» и подтвердите — сумма к выдаче станет 0.' : '«К выдаче» — сколько ещё не возмещено сотруднику.';
@@ -139,7 +152,7 @@ function renderHistory() {
   $('log').innerHTML = list.length ? list.map(e => {
     if (e.pmt) return `<div class="li pmt"><span style="min-width:0"><b>Выдано</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.by || 'выдача')}</small></span>
       <span class="a">+${fmt(e.amount)}</span>${canUndoPay(e) ? `<button class="undo" type="button" data-delpay="${esc(e.id)}">Отменить</button>` : '<span></span>'}</div>`;
-    return `<div class="li"><span style="min-width:0"><b>${esc([e.place, e.note].filter(Boolean).join(' — ') || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.cat)}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small></span>
+    return `<div class="li"><span style="min-width:0"><b>${esc([e.place, e.note].filter(Boolean).join(' — ') || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(catLabel(e.cat))}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small></span>
       <span class="a">−${fmt(e.amount)}</span>${canDel(e) && !e.pending ? `<button class="del" type="button" data-del="${esc(e.id)}" aria-label="Удалить">×</button>` : '<span></span>'}</div>`
   }).join('') : '<div class="empty">Расходов пока нет.</div>';
 }
@@ -336,7 +349,6 @@ async function exportXlsx() {
 $('dlLedger').addEventListener('click', exportXlsx);
 
 // ---- Отчёт для налоговой: 현금 지출 현황 по году ----
-const CAT_KO = { 'Бензин': '주유비', 'Еда': '식대', 'Транспорт': '교통비', 'Прочее': '기타' };
 function renderTaxYears() {
   const ys = [...new Set(expenses.map(e => dateOf(e).slice(0, 4)).concat([isoDay(0).slice(0, 4)]))].sort().reverse();
   const sel = $('taxYear'), cur = sel.value || ys[0];
@@ -352,7 +364,7 @@ async function exportTax() {
   const ser = iso => { const [y, m, d] = iso.split('-').map(Number); return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 864e5 };
   const rows = expenses.filter(e => dateOf(e).startsWith(year + '-'))
     .sort((a, b) => dateOf(a).localeCompare(dateOf(b)) || (a.created || 0) - (b.created || 0))
-    .map(e => ({ date: ser(dateOf(e)), place: e.place || '', detail: [CAT_KO[e.cat] || e.cat, e.note].filter(Boolean).join(' - '), amount: e.amount, memo: nameOf(e.staff) }));
+    .map(e => ({ date: ser(dateOf(e)), place: e.place || '', detail: [e.cat, e.note].filter(Boolean).join(' - '), amount: e.amount, memo: nameOf(e.staff) }));
   try {
     const buf = XLSX.write(buildTaxBook(XLSX, year, rows), { bookType: 'xlsx', type: 'array' });
     await saveFile(buf, `현금지출현황_${year}.xlsx`);
