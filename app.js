@@ -206,6 +206,8 @@ $('form').addEventListener('submit', async e => {
   if (!a) { msg('Введите сумму.', 'err'); amt.focus(); return }
   if (a > 100000000) { msg('Сумма слишком большая — проверьте, нет ли лишних нулей.', 'err'); return }
   if (date > isoDay(0)) { msg('Дата не может быть в будущем.', 'err'); return }
+  if (!$('place').value.trim()) { msg('Укажите, где потратили.', 'err'); $('place').focus(); return }
+  if (!$('note').value.trim()) { msg('Напишите комментарий.', 'err'); $('note').focus(); return }
   const note = $('note').value.trim(), place = $('place').value.trim();
   const clientId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const local = { id: clientId, date, staff: who.id, cat, amount: a, note, place, created: Date.now() };
