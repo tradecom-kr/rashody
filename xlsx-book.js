@@ -103,24 +103,28 @@ function buildBook(X, d){
   // ---- Лист 2: Расходы ----
   {
     const ws={}; let r=0;
-    const H=['Дата','Сотрудник','Категория','Сумма, ₩','Комментарий'];
+    const H=['Дата','Сотрудник','Категория','Сумма, ₩','Комментарий','Не возмещается'];
     H.forEach((h,c)=>put(ws,r,c,cell(h,S.head))); r++;
+    const dim=st=>e=>e.rej?Object.assign({},st,{font:font({color:{rgb:'8C8C8C'},strike:st===S.num})}):st;
     d.expenses.forEach((e,k)=>{
-      put(ws,r,0,cell(e.date,zebra(S.date,k),'n'));
-      put(ws,r,1,cell(e.name,zebra(S.text,k)));
-      put(ws,r,2,cell(e.cat,zebra(S.text,k)));
-      put(ws,r,3,cell(e.amount,zebra(S.num,k)));
-      put(ws,r,4,cell(e.note||'',zebra(S.text,k)));
+      const g=st=>dim(zebra(st,k))(e);
+      put(ws,r,0,cell(e.date,g(S.date),'n'));
+      put(ws,r,1,cell(e.name,g(S.text)));
+      put(ws,r,2,cell(e.cat,g(S.text)));
+      put(ws,r,3,cell(e.amount,e.rej?Object.assign({},zebra(S.num,k),{font:font({color:{rgb:'8C8C8C'},strike:true})}):zebra(S.num,k)));
+      put(ws,r,4,cell(e.note||'',g(S.text)));
+      put(ws,r,5,cell(e.rej||'',zebra(S.text,k)));
       r++;
     });
-    put(ws,r,0,cell('Итого',S.totalL));
-    put(ws,r,1,cell(`записей: ${d.expenses.length}`,S.totalL));
+    const ok=d.expenses.filter(e=>!e.rej);
+    put(ws,r,0,cell('Итого к возмещению',S.totalL));
+    put(ws,r,1,cell(`записей: ${ok.length}`,S.totalL));
     put(ws,r,2,cell('',S.totalL));
-    put(ws,r,3,cell(d.expenses.reduce((a,e)=>a+e.amount,0),S.total));
-    put(ws,r,4,cell('',S.totalL)); r++;
-    finish(ws,r,5,0);
-    ws['!cols']=[{wch:12},{wch:18},{wch:14},{wch:14},{wch:44}];
-    if(d.expenses.length)ws['!autofilter']={ref:X.utils.encode_range({s:{r:0,c:0},e:{r:d.expenses.length,c:4}})};
+    put(ws,r,3,cell(ok.reduce((a,e)=>a+e.amount,0),S.total));
+    put(ws,r,4,cell('',S.totalL)); put(ws,r,5,cell('',S.totalL)); r++;
+    finish(ws,r,6,0);
+    ws['!cols']=[{wch:12},{wch:18},{wch:14},{wch:14},{wch:44},{wch:20}];
+    if(d.expenses.length)ws['!autofilter']={ref:X.utils.encode_range({s:{r:0,c:0},e:{r:d.expenses.length,c:5}})};
     X.utils.book_append_sheet(wb,ws,'Расходы');
   }
 
@@ -154,7 +158,7 @@ function weeklyLedger(){
     const from=isoOf(w.getTime()), end=new Date(w);end.setDate(end.getDate()+6);const to=isoOf(end.getTime());
     const isCur=from===isoOf(cur.getTime()), rows=[];
     for(const s of staff){
-      const spent=expenses.filter(e=>e.staff===s.id&&dateOf(e)>=from&&dateOf(e)<=to).reduce((a,e)=>a+e.amount,0);
+      const spent=expenses.filter(e=>e.staff===s.id&&!e.rej&&dateOf(e)>=from&&dateOf(e)<=to).reduce((a,e)=>a+e.amount,0);
       const ps=payments.filter(p=>p.staff===s.id&&p.date>=from&&p.date<=to);
       const paid=ps.reduce((a,p)=>a+p.amount,0);
       const c=carry[s.id]||0, total=c+spent, rest=total-paid;

@@ -74,11 +74,12 @@ function isVerified(id) {
 function current() { const s = staff.find(x => x.id === me); return s && isVerified(s.id) ? s : null }
 const isOwner = () => role === 'owner' || role === 'acc'; // бухгалтер — полные права
 const canPay = () => role === 'owner' || role === 'acc';
-function canDel(e) { if (isOwner()) return true; const c = current(); return !!c && e.staff === c.id }
+function canDel(e) { if (isOwner()) return true; const c = current(); return !!c && e.staff === c.id && !e.rej }
+const counts = e => !e.rej;   // расход «Не возмещается» не идёт в выдачу, ведомость и отчёт
 const canUndoPay = p => isOwner();
 function authFor(staffId) { return isOwner() ? { rolePass } : { staff: staffId, pin: pinOf(staffId) } }
 const paidBy = id => payments.filter(p => p.staff === id).reduce((a, p) => a + p.amount, 0);
-const spentBy = id => expenses.filter(e => e.staff === id).reduce((a, e) => a + e.amount, 0);
+const spentBy = id => expenses.filter(e => e.staff === id && counts(e)).reduce((a, e) => a + e.amount, 0);
 const nameOf = id => { const s = allStaff.find(x => x.id === id); return s ? s.name : '—' };
 
 // ---- отрисовка ----
@@ -152,7 +153,9 @@ function renderHistory() {
   $('log').innerHTML = list.length ? list.map(e => {
     if (e.pmt) return `<div class="li pmt"><span style="min-width:0"><b>Выдано</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(e.by || 'выдача')}</small></span>
       <span class="a">+${fmt(e.amount)}</span>${canUndoPay(e) ? `<button class="undo" type="button" data-delpay="${esc(e.id)}">Отменить</button>` : '<span></span>'}</div>`;
-    return `<div class="li"><span style="min-width:0"><b>${esc([e.place, e.note].filter(Boolean).join(' — ') || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(catLabel(e.cat))}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small></span>
+    const rj = e.rej ? `<span class="rejtag">Не возмещается: ${esc(e.rej)}</span>` : '';
+    const rb = isOwner() && !e.pending ? (e.rej ? `<button type="button" class="linkbtn rejbtn" data-unrej="${esc(e.id)}">Вернуть к выдаче</button>` : `<button type="button" class="linkbtn rejbtn" data-rej="${esc(e.id)}">Не возмещать</button>`) : '';
+    return `<div class="li${e.rej ? ' rej' : ''}" data-row="${esc(e.id)}"><span style="min-width:0"><b>${esc([e.place, e.note].filter(Boolean).join(' — ') || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(catLabel(e.cat))}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small>${rj || rb ? `<small class="rejline">${rj}${rb}</small>` : ''}</span>
       <span class="a">−${fmt(e.amount)}</span>${canDel(e) && !e.pending ? `<button class="del" type="button" data-del="${esc(e.id)}" aria-label="Удалить">×</button>` : '<span></span>'}</div>`
   }).join('') : '<div class="empty">Расходов пока нет.</div>';
 }
@@ -296,6 +299,21 @@ document.addEventListener('click', async e => {
     return;
   }
 
+  // «Не возмещать»: бухгалтер указывает причину, расход остаётся в истории, но не идёт в выдачу
+  const rq = e.target.closest('[data-rej]');
+  if (rq) {
+    if (!isOwner()) return;
+    document.querySelectorAll('.rejform').forEach(f => f.remove());
+    const row = rq.closest('.li'), f = document.createElement('form');
+    f.className = 'rejform'; f.dataset.id = rq.dataset.rej; f.noValidate = true;
+    f.innerHTML = `<input type="text" maxlength="80" value="нет чека" aria-label="Причина"><button type="submit" class="tubtn">Не возмещать</button><button type="button" class="linkbtn" data-rejcancel="1">Отмена</button>`;
+    row.after(f); f.querySelector('input').select();
+    return;
+  }
+  if (e.target.closest('[data-rejcancel]')) { e.target.closest('.rejform').remove(); return }
+  const ur = e.target.closest('[data-unrej]');
+  if (ur) { setRej(ur.dataset.unrej, ''); return }
+
   const d = e.target.closest('[data-del]');
   if (d) {
     const ex = expenses.find(x => x.id === d.dataset.del); if (!ex || !canDel(ex)) return;
@@ -305,6 +323,19 @@ document.addEventListener('click', async e => {
     catch (err) { expenses.push(ex); msg('Не удалось удалить: ' + err.message, 'err'); render() }
   }
 });
+
+document.addEventListener('submit', e => {
+  const f = e.target.closest('.rejform'); if (!f) return;
+  e.preventDefault();
+  setRej(f.dataset.id, f.querySelector('input').value.trim() || 'не возмещается');
+});
+async function setRej(id, reason) {
+  const ex = expenses.find(x => x.id === id); if (!ex || !isOwner()) return;
+  const old = ex.rej || '';
+  ex.rej = reason; render();
+  try { const r = await api(reason ? 'reject' : 'unreject', { rolePass, id, reason }); ex.rej = r.rej || ''; render() }
+  catch (err) { ex.rej = old; msg('Не сохранилось: ' + err.message, 'err'); render() }
+}
 
 $('roleBox').addEventListener('submit', async e => {
   e.preventDefault();
@@ -328,7 +359,7 @@ async function exportXlsx() {
   const data = {
     today: dmy(isoDay(0)),
     staff: staff.map(s => { const sp = spentBy(s.id), pd = paidBy(s.id); return { name: s.name, budget: s.budget, spent: sp, paid: pd, due: sp - pd } }),
-    expenses: expenses.slice().sort((a, b) => dateOf(a).localeCompare(dateOf(b)) || (a.created || 0) - (b.created || 0)).map(e => ({ date: ser(dateOf(e)), name: nameOf(e.staff), cat: e.cat, amount: e.amount, note: e.note || '' })),
+    expenses: expenses.slice().sort((a, b) => dateOf(a).localeCompare(dateOf(b)) || (a.created || 0) - (b.created || 0)).map(e => ({ date: ser(dateOf(e)), name: nameOf(e.staff), cat: e.cat, amount: e.amount, note: e.note || '', rej: e.rej || '' })),
     payments: payments.slice().sort((a, b) => (a.created || 0) - (b.created || 0)).map(p => ({ date: ser(p.date), name: nameOf(p.staff), amount: p.amount }))
   };
   data.weeks = weeklyLedger();
@@ -362,7 +393,7 @@ async function exportTax() {
   await load(true);
   const year = $('taxYear').value || isoDay(0).slice(0, 4);
   const ser = iso => { const [y, m, d] = iso.split('-').map(Number); return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 864e5 };
-  const rows = expenses.filter(e => dateOf(e).startsWith(year + '-'))
+  const rows = expenses.filter(e => counts(e) && dateOf(e).startsWith(year + '-'))
     .sort((a, b) => dateOf(a).localeCompare(dateOf(b)) || (a.created || 0) - (b.created || 0))
     .map(e => ({ date: ser(dateOf(e)), place: e.place || '', detail: [e.cat, e.note].filter(Boolean).join(' - '), amount: e.amount, memo: nameOf(e.staff) }));
   try {

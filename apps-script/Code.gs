@@ -11,7 +11,7 @@ var SALT = 'rashody-komandy-v1';
 var SH = { staff: 'Сотрудники', exp: 'Расходы', pay: 'Выдачи', set: 'Настройки' };
 var HEAD = {
   staff: ['ID', 'Имя', 'Бюджет', 'Пароль', 'Порядок', 'Скрыт', 'Хеш пароля'],
-  exp:   ['ID', 'Дата', 'ID сотрудника', 'Сотрудник', 'Категория', 'Сумма', 'Комментарий', 'Внесено', 'Место'],
+  exp:   ['ID', 'Дата', 'ID сотрудника', 'Сотрудник', 'Категория', 'Сумма', 'Комментарий', 'Внесено', 'Место', 'Не возмещается'],
   pay:   ['ID', 'Дата', 'ID сотрудника', 'Сотрудник', 'Сумма', 'Кто отметил', 'Внесено']
 };
 var DEFAULT_CATS = '주유비, 식대, 교통비, 하이패스, 택배비, 차량정비, 접대, 사무용품, 기타';
@@ -50,6 +50,8 @@ function route_(req) {
     if (a === 'del') return del_(req);
     if (a === 'pay') return pay_(req);
     if (a === 'unpay') return unpay_(req);
+    if (a === 'reject') return reject_(req, true);
+    if (a === 'unreject') return reject_(req, false);
     fail_('Неизвестное действие.');
   } finally {
     lock.releaseLock();
@@ -77,7 +79,7 @@ function sheet_(key) {
 function ensureHead_(key) {
   var sh = sheet_(key), want = HEAD[key]; if (!want) return sh;
   var have = sh.getLastColumn() ? sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0] : [];
-  if (have.length < want.length) sh.getRange(1, 1, 1, want.length).setValues([want]).setFontWeight('bold').setBackground('#E7E6E6');
+  if (want.some(function (h, i) { return have[i] !== h; })) sh.getRange(1, 1, 1, want.length).setValues([want]).setFontWeight('bold').setBackground('#E7E6E6');
   return sh;
 }
 
@@ -137,6 +139,7 @@ function staffAll_() {
 }
 
 function readAll_() {
+  ensureHead_('exp');
   var st = settings_();
   var cats = String(st['Категории'] || DEFAULT_CATS).split(',').map(function (x) { return x.trim(); }).filter(String);
   return {
@@ -146,7 +149,8 @@ function readAll_() {
     cats: cats,
     expenses: rows_('exp').map(function (r) {
       return { id: String(r['ID']), date: iso_(r['Дата']), staff: String(r['ID сотрудника']), cat: String(r['Категория'] || ''),
-               amount: num_(r['Сумма']), note: String(r['Комментарий'] || ''), place: String(r['Место'] || ''), created: r['Внесено'] instanceof Date ? r['Внесено'].getTime() : 0 };
+               amount: num_(r['Сумма']), note: String(r['Комментарий'] || ''), place: String(r['Место'] || ''), created: r['Внесено'] instanceof Date ? r['Внесено'].getTime() : 0,
+               rej: String(r['Не возмещается'] || '').trim() };
     }).filter(function (e) { return e.amount > 0; }),
     payments: rows_('pay').map(function (r) {
       return { id: String(r['ID']), date: iso_(r['Дата']), staff: String(r['ID сотрудника']), amount: num_(r['Сумма']),
@@ -221,6 +225,7 @@ function del_(req) {
   if (role_(req.rolePass) !== 'owner') {
     var s = staffOk_(req.staff, req.pin);
     if (String(row['ID сотрудника']) !== s.id) fail_('Удалять можно только свои расходы.');
+    if (String(row['Не возмещается'] || '').trim()) fail_('Этот расход отмечен бухгалтером — удалить его может только бухгалтер.');
   }
   sheet_('exp').deleteRow(row._row);
   return { ok: true };
@@ -251,6 +256,18 @@ function unpay_(req) {
   if (role === 'acc' && String(row['Кто отметил']) !== 'Бухгалтер') fail_('Бухгалтер может отменить только свою выдачу.');
   sheet_('pay').deleteRow(row._row);
   return { ok: true };
+}
+
+// пометить расход «Не возмещается» (с причиной) или снять пометку — только бухгалтер
+function reject_(req, on) {
+  if (role_(req.rolePass) !== 'owner') fail_('Это может только бухгалтер.');
+  var sh = ensureHead_('exp');
+  var row = rows_('exp').filter(function (r) { return String(r['ID']) === String(req.id); })[0];
+  if (!row) fail_('Запись не найдена.');
+  var col = HEAD.exp.indexOf('Не возмещается') + 1;
+  var reason = on ? (String(req.reason || '').trim().slice(0, 80) || 'не возмещается') : '';
+  sh.getRange(row._row, col).setValues([[reason]]);
+  return { ok: true, rej: reason };
 }
 
 /* ---------- первый запуск: создать листы, если их нет ---------- */
