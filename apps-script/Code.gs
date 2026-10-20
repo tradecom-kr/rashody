@@ -11,7 +11,7 @@ var SALT = 'rashody-komandy-v1';
 var SH = { staff: 'Сотрудники', exp: 'Расходы', pay: 'Выдачи', set: 'Настройки' };
 var HEAD = {
   staff: ['ID', 'Имя', 'Бюджет', 'Пароль', 'Порядок', 'Скрыт', 'Хеш пароля'],
-  exp:   ['ID', 'Дата', 'ID сотрудника', 'Сотрудник', 'Категория', 'Сумма', 'Комментарий', 'Внесено', 'Место', 'Не возмещается'],
+  exp:   ['ID', 'Дата', 'ID сотрудника', 'Сотрудник', 'Категория', 'Сумма', 'Комментарий', 'Внесено', 'Место', 'Не возмещается', 'Чек'],
   pay:   ['ID', 'Дата', 'ID сотрудника', 'Сотрудник', 'Сумма', 'Кто отметил', 'Внесено']
 };
 var DEFAULT_CATS = '주유비, 식대, 교통비, 하이패스, 택배비, 차량정비, 접대, 사무용품, 기타';
@@ -42,6 +42,7 @@ function route_(req) {
   var a = req.action || 'data';
   if (a === 'data') return { ok: true, data: readAll_() };
   if (a === 'login') return login_(req);
+  if (a === 'scan') return scan_(req);
   if (a === 'roleLogin') return { ok: true, role: role_(req.rolePass) || fail_('Неверный пароль.') };
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -150,7 +151,7 @@ function readAll_() {
     expenses: rows_('exp').map(function (r) {
       return { id: String(r['ID']), date: iso_(r['Дата']), staff: String(r['ID сотрудника']), cat: String(r['Категория'] || ''),
                amount: num_(r['Сумма']), note: String(r['Комментарий'] || ''), place: String(r['Место'] || ''), created: r['Внесено'] instanceof Date ? r['Внесено'].getTime() : 0,
-               rej: String(r['Не возмещается'] || '').trim() };
+               rej: String(r['Не возмещается'] || '').trim(), receipt: String(r['Чек'] || '').trim() };
     }).filter(function (e) { return e.amount > 0; }),
     payments: rows_('pay').map(function (r) {
       return { id: String(r['ID']), date: iso_(r['Дата']), staff: String(r['ID сотрудника']), amount: num_(r['Сумма']),
@@ -211,7 +212,17 @@ function add_(req) {
   var id = /^[A-Za-z0-9_-]{8,40}$/.test(cid) ? cid : newId_();
   if (cid && rows_('exp').some(function (r) { return String(r['ID']) === id; })) return { ok: true, id: id, dup: true };
   var sh = ensureHead_('exp');
-  sh.appendRow([id, dateCell_(date), s.id, s.name, cat, amount, note, new Date(), place]);
+  var rid = String(req.receiptId || '');
+  var receipt = /^[A-Za-z0-9_-]{10,100}$/.test(rid) ? 'https://drive.google.com/file/d/' + rid + '/view' : '';
+  if (receipt) {
+    // принимаем только файл из папки чеков (чужие файлы Диска не трогаем)
+    try {
+      var rf = DriveApp.getFileById(rid), fid = receiptFolder_().getId(), inFolder = false, ps = rf.getParents();
+      while (ps.hasNext()) if (ps.next().getId() === fid) inFolder = true;
+      if (inFolder) rf.setName(date + ' ' + s.name + ' ' + amount + ' ' + (place || cat) + '.jpg'); else receipt = '';
+    } catch (err) { receipt = ''; }
+  }
+  sh.appendRow([id, dateCell_(date), s.id, s.name, cat, amount, note, new Date(), place, '', receipt]);
   var r = sh.getLastRow();
   sh.getRange(r, 2).setNumberFormat('yyyy.mm.dd');
   sh.getRange(r, 6).setNumberFormat('#,##0');
@@ -268,6 +279,83 @@ function reject_(req, on) {
   var reason = on ? (String(req.reason || '').trim().slice(0, 80) || 'не возмещается') : '';
   sh.getRange(row._row, col).setValues([[reason]]);
   return { ok: true, rej: reason };
+}
+
+/* ---------- фото чека: распознать (Gemini) и сохранить на Диск ---------- */
+
+var RECEIPT_FOLDER = 'Чеки — Расходы команды';
+
+function scan_(req) {
+  if (role_(req.rolePass) !== 'owner') staffOk_(req.staff, req.pin);   // только вошедшие сотрудники
+  var b64 = String(req.image || '');
+  if (!b64 || b64.length > 6000000) fail_('Фото не получено или слишком большое.');
+  var mime = /^image\/(jpeg|png|webp)$/.test(String(req.mime)) ? String(req.mime) : 'image/jpeg';
+  var st = settings_();
+  var out = { ok: true, fields: null, receiptId: '' };
+
+  // 1) сохранить фото на Диск (папка создаётся сама)
+  try {
+    var bytes = Utilities.base64Decode(b64);
+    var file = receiptFolder_().createFile(Utilities.newBlob(bytes, mime, 'чек ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH-mm-ss') + '.jpg'));
+    out.receiptId = file.getId();
+  } catch (err) { out.saveError = String(err && err.message || err); }
+
+  // 2) распознать
+  var key = String(st['Ключ Gemini'] || '').trim();
+  if (!key) { out.scanError = 'Распознавание не настроено: нет «Ключ Gemini» в листе «Настройки».'; return out; }
+  var cats = String(st['Категории'] || DEFAULT_CATS).split(',').map(function (x) { return x.trim(); }).filter(String);
+  var model = String(st['Модель Gemini'] || 'gemini-flash-latest').trim();
+  var prompt = 'Это фото чека (영수증) из Южной Кореи. Извлеки данные. ' +
+    'date — дата покупки в формате YYYY-MM-DD (пусто, если не видно). ' +
+    'amount — итоговая сумма к оплате в вонах целым числом (합계/결제금액/받을금액; не 부가세 и не 과세물품가액). ' +
+    'place — название магазина/заправки (상호) по-корейски, как на чеке, без номера 사업자번호. ' +
+    'category — одна из: ' + cats.join(', ') + ' (주유비 — заправка/LPG/충전소, 식대 — еда, кафе, магазин продуктов, 하이패스 — платная дорога/통행료, 택배비 — почта/우체국/доставка, 차량정비 — ремонт авто/масло). ' +
+    'note — очень коротко по-корейски, что куплено (например 휘발유, 점심, 통행료). ' +
+    'is_receipt — false, если на фото не чек.';
+  var body = {
+    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: b64 } }] }],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: 'application/json',
+      responseSchema: { type: 'OBJECT', properties: {
+        is_receipt: { type: 'BOOLEAN' }, date: { type: 'STRING' }, amount: { type: 'INTEGER' },
+        place: { type: 'STRING' }, category: { type: 'STRING', enum: cats }, note: { type: 'STRING' } },
+        required: ['is_receipt', 'amount'] }
+    }
+  };
+  try {
+    var res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent',
+      { method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': key }, payload: JSON.stringify(body), muteHttpExceptions: true });
+    var code = res.getResponseCode(), txt = res.getContentText();
+    if (code !== 200) { out.scanError = 'Сервис распознавания ответил ошибкой ' + code + '.'; out.detail = txt.slice(0, 300); return out; }
+    var j = JSON.parse(txt);
+    var part = j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts && j.candidates[0].content.parts[0];
+    var f = JSON.parse(part && part.text || '{}');
+    out.fields = {
+      isReceipt: f.is_receipt !== false,
+      date: /^\d{4}-\d{2}-\d{2}$/.test(String(f.date || '')) ? String(f.date) : '',
+      amount: Math.max(0, Math.round(num_(f.amount))) || 0,
+      place: String(f.place || '').slice(0, 80),
+      cat: cats.indexOf(String(f.category)) >= 0 ? String(f.category) : '',
+      note: String(f.note || '').slice(0, 120)
+    };
+  } catch (err) { out.scanError = 'Не удалось распознать чек: ' + String(err && err.message || err); }
+  return out;
+}
+
+function receiptFolder_() {
+  var props = PropertiesService.getScriptProperties(), id = props.getProperty('receiptFolder');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (err) {} }
+  var it = DriveApp.getFoldersByName(RECEIPT_FOLDER);
+  var folder = it.hasNext() ? it.next() : DriveApp.createFolder(RECEIPT_FOLDER);
+  props.setProperty('receiptFolder', folder.getId());
+  return folder;
+}
+
+// Запустите один раз вручную (▶ Выполнить), чтобы Google спросил разрешения на Диск и внешние запросы
+function authorize() {
+  receiptFolder_();
+  UrlFetchApp.fetch('https://generativelanguage.googleapis.com/', { muteHttpExceptions: true });
 }
 
 /* ---------- первый запуск: создать листы, если их нет ---------- */

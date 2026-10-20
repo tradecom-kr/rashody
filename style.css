@@ -136,3 +136,10 @@ details.box>summary{cursor:pointer;font-weight:700}
 .rejform{display:flex;gap:8px;align-items:center;padding:8px 0 10px;border-bottom:1px solid var(--line)}
 .rejform input{font:inherit;font-size:15px;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--fg);min-width:0;flex:1}
 .li.pmt.adv .a{color:var(--muted)}
+
+.scanbtn{font:inherit;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:12px;border:1.5px dashed var(--accent);background:var(--accent-soft);color:var(--accent);cursor:pointer}
+.scanbtn[disabled]{opacity:.6;cursor:progress}
+.rchip{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;padding:8px 12px;border-radius:10px;background:var(--ok-soft);color:var(--ok)}
+.filled{animation:filled 1.6s ease-out}
+@keyframes filled{0%{box-shadow:0 0 0 3px var(--ok)}100%{box-shadow:0 0 0 0 transparent}}
+.rlink{color:var(--accent);font-size:12px}

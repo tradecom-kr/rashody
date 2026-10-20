@@ -14,7 +14,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 <style>
 html,body{margin:0}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -44,6 +44,10 @@ html,body{margin:0}
     </div>
     <p class="msg err" id="pinErr" hidden></p>
     <p class="meline" id="meLine" hidden><span id="meName"></span> · <button type="button" class="linkbtn" id="meOut">Выйти</button></p>
+    <button type="button" class="scanbtn" id="scanBtn"><span aria-hidden="true">📷</span> Сфотографировать чек</button>
+    <input type="file" id="scanFile" accept="image/*" hidden>
+    <p class="msg" id="scanMsg" hidden></p>
+    <div class="rchip" id="rChip" hidden><span>🧾 Фото чека прикреплено</span><button type="button" class="linkbtn" id="rDel">убрать</button></div>
     <label class="amt-cap" for="amount">Сумма расхода</label>
     <div class="amt-wrap">
       <input class="amt" id="amount" inputmode="numeric" autocomplete="off" placeholder="Введите сумму" aria-label="Сумма в вонах">
@@ -93,6 +97,6 @@ html,body{margin:0}
 <script src="config.js?v=2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="xlsx-book.js?v=8"></script>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

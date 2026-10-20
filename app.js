@@ -18,7 +18,7 @@ const ls = {
 let allStaff = [], staff = [], cats = [], expenses = [], payments = [];
 let me = ls.get('me') || '', cat = ls.get('cat') || '', hWho = 'all', hQ = '';
 let role = ls.get('role') || '', rolePass = ls.get('rolePass') || '';
-let ready = false, lastLoad = 0;
+let ready = false, lastLoad = 0, receiptId = '', scanning = false;
 
 // ---- даты ----
 function isoDay(offset) { const d = new Date(); d.setDate(d.getDate() + (offset || 0)); return isoOf(d.getTime()) }
@@ -162,7 +162,8 @@ function renderHistory() {
       <span class="a">+${fmt(e.amount)}</span>${canUndoPay(e) ? `<button class="undo" type="button" data-delpay="${esc(e.id)}">Отменить</button>` : '<span></span>'}</div>`;
     const rj = e.rej ? `<span class="rejtag">Не возмещается: ${esc(e.rej)}</span>` : '';
     const rb = isOwner() && !e.pending ? (e.rej ? `<button type="button" class="linkbtn rejbtn" data-unrej="${esc(e.id)}">Вернуть к выдаче</button>` : `<button type="button" class="linkbtn rejbtn" data-rej="${esc(e.id)}">Не возмещать</button>`) : '';
-    return `<div class="li${e.rej ? ' rej' : ''}" data-row="${esc(e.id)}"><span style="min-width:0"><b>${esc([e.place, e.note].filter(Boolean).join(' — ') || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(catLabel(e.cat))}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small>${rj || rb ? `<small class="rejline">${rj}${rb}</small>` : ''}</span>
+    const rl = e.receipt && isOwner() ? ` · <a class="rlink" href="${esc(e.receipt)}" target="_blank" rel="noopener">🧾 чек</a>` : '';
+    return `<div class="li${e.rej ? ' rej' : ''}" data-row="${esc(e.id)}"><span style="min-width:0"><b>${esc([e.place, e.note].filter(Boolean).join(' — ') || e.cat)}</b><small>${dmy(dateOf(e))} · ${esc(nameOf(e.staff))} · ${esc(catLabel(e.cat))}${rl}${e.pending ? ' · <i>сохраняется…</i>' : ''}</small>${rj || rb ? `<small class="rejline">${rj}${rb}</small>` : ''}</span>
       <span class="a">−${fmt(e.amount)}</span>${canDel(e) && !e.pending ? `<button class="del" type="button" data-del="${esc(e.id)}" aria-label="Удалить">×</button>` : '<span></span>'}</div>`
   }).join('') : `<div class="empty">${hQ.trim() ? 'Ничего не найдено.' : 'Расходов пока нет.'}</div>`;
 }
@@ -198,7 +199,7 @@ $('pinGo').addEventListener('click', tryPin);
 // выход сотрудника: забыть пароль на этом телефоне
 $('meOut').addEventListener('click', () => {
   if (me) ls.del('pin_' + me);
-  me = ''; ls.set('me', ''); $('pinIn').value = ''; msg('', ''); render();
+  me = ''; ls.set('me', ''); $('pinIn').value = ''; msg('', ''); setReceipt(''); render();
 });
 $('pinIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); tryPin() } });
 
@@ -246,17 +247,65 @@ $('form').addEventListener('submit', async e => {
   if (!a) { msg('Введите сумму.', 'err'); amt.focus(); return }
   if (a > 100000000) { msg('Сумма слишком большая — проверьте, нет ли лишних нулей.', 'err'); return }
   if (date > isoDay(0)) { msg('Дата не может быть в будущем.', 'err'); return }
+  if (scanning) { msg('Подождите — чек ещё распознаётся.', 'err'); return }
   if (!$('place').value.trim()) { msg('Укажите, где потратили.', 'err'); $('place').focus(); return }
   if (!$('note').value.trim()) { msg('Напишите комментарий.', 'err'); $('note').focus(); return }
   const note = $('note').value.trim(), place = $('place').value.trim();
   const clientId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const local = { id: clientId, date, staff: who.id, cat, amount: a, note, place, created: Date.now() };
-  const payload = Object.assign({ cat, amount: a, date, note, place, clientId }, authFor(who.id), { staff: who.id });
+  const payload = Object.assign({ cat, amount: a, date, note, place, clientId, receiptId }, authFor(who.id), { staff: who.id });
   setQueue(getQueue().concat([{ payload, local }]));
   expenses.push(Object.assign({}, local, { pending: true }));
   msg(`Списано ${fmt(a)} · ${cat} · ${who.name} · ${dmy(date)} · сохраняется…`, 'ok'); $('msg').dataset.pid = clientId;
-  amt.value = ''; $('note').value = ''; $('place').value = ''; render();
+  amt.value = ''; $('note').value = ''; $('place').value = ''; setReceipt(''); render();
   flush();
+});
+
+// ---- фото чека: сжать, отправить, подставить поля ----
+function setReceipt(id) { receiptId = id || ''; $('rChip').hidden = !receiptId }
+function scanMsg(t, k) { const m = $('scanMsg'); m.hidden = !t; m.textContent = t || ''; m.className = 'msg ' + (k || '') }
+$('rDel').addEventListener('click', () => { setReceipt(''); scanMsg('') });
+$('scanBtn').addEventListener('click', () => {
+  if (!me) { scanMsg('Сначала выберите себя в поле «Кто вы?».', 'err'); $('who').focus(); return }
+  if (!current()) { scanMsg('Сначала войдите — введите пароль.', 'err'); $('pinIn').focus(); return }
+  $('scanFile').value = ''; $('scanFile').click();
+});
+function shrink(file) {
+  return new Promise((ok, bad) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', 0.82).split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); bad(new Error('Не удалось открыть фото.')) };
+    img.src = url;
+  });
+}
+function flash(el) { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled') }
+$('scanFile').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  const who = current(); if (!who) return;
+  const btn = $('scanBtn'); btn.disabled = true; scanning = true;
+  scanMsg('Распознаю чек… это займёт несколько секунд.', '');
+  try {
+    const image = await shrink(f);
+    const r = await api('scan', Object.assign({ image, mime: 'image/jpeg' }, authFor(who.id), { staff: who.id }));
+    if (r.receiptId) setReceipt(r.receiptId);
+    const x = r.fields;
+    if (!x) { scanMsg((r.scanError || 'Не удалось распознать чек.') + ' Заполните поля вручную' + (r.receiptId ? ' — фото чека всё равно прикреплено.' : '.'), 'err'); return }
+    if (!x.isReceipt) { scanMsg('Похоже, на фото не чек. Проверьте и заполните поля вручную.', 'err'); return }
+    const got = [];
+    if (x.amount > 0 && x.amount <= 100000000) { amt.value = x.amount.toLocaleString('ru-RU'); flash(amt.parentElement); got.push('сумма') }
+    if (x.date && x.date <= isoDay(0) && x.date >= isoDay(-400)) { $('date').value = x.date; flash($('date')); got.push('дата') }
+    if (x.place) { $('place').value = x.place; flash($('place')); got.push('место') }
+    if (x.cat && cats.includes(x.cat)) { cat = x.cat; ls.set('cat', cat); renderForm(); got.push('категория') }
+    if (x.note && !$('note').value.trim()) { $('note').value = x.note; flash($('note')); got.push('комментарий') }
+    scanMsg(got.length ? `Заполнено: ${got.join(', ')}. Проверьте и нажмите «Списать».` : 'Чек не читается — заполните поля вручную.', got.length ? 'ok' : 'err');
+  } catch (err) {
+    scanMsg('Не получилось: ' + err.message + ' Заполните поля вручную.', 'err');
+  } finally { btn.disabled = false; scanning = false }
 });
 
 // ---- клики: категории, выдачи, удаление ----
