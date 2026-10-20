@@ -18,7 +18,7 @@ const ls = {
 let allStaff = [], staff = [], cats = [], expenses = [], payments = [];
 let me = ls.get('me') || '', cat = ls.get('cat') || '', hWho = 'all', hQ = '';
 let role = ls.get('role') || '', rolePass = ls.get('rolePass') || '';
-let ready = false, lastLoad = 0, receiptId = '', scanning = false;
+let ready = false, lastLoad = 0, receiptId = '', scanning = false, receiptP = null;
 
 // ---- даты ----
 function isoDay(offset) { const d = new Date(); d.setDate(d.getDate() + (offset || 0)); return isoOf(d.getTime()) }
@@ -248,6 +248,7 @@ $('form').addEventListener('submit', async e => {
   if (a > 100000000) { msg('Сумма слишком большая — проверьте, нет ли лишних нулей.', 'err'); return }
   if (date > isoDay(0)) { msg('Дата не может быть в будущем.', 'err'); return }
   if (scanning) { msg('Подождите — чек ещё распознаётся.', 'err'); return }
+  if (receiptP) { busy = true; msg('Сохраняю фото чека…', ''); try { await receiptP } finally { busy = false } }
   if (!$('place').value.trim()) { msg('Укажите, где потратили.', 'err'); $('place').focus(); return }
   if (!$('note').value.trim()) { msg('Напишите комментарий.', 'err'); $('note').focus(); return }
   const note = $('note').value.trim(), place = $('place').value.trim();
@@ -262,7 +263,7 @@ $('form').addEventListener('submit', async e => {
 });
 
 // ---- фото чека: сжать, отправить, подставить поля ----
-function setReceipt(id) { receiptId = id || ''; $('rChip').hidden = !receiptId }
+function setReceipt(id) { if (!id) receiptP = null; receiptId = id || ''; $('rChip').hidden = !receiptId }
 function scanMsg(t, k) { const m = $('scanMsg'); m.hidden = !t; m.textContent = t || ''; m.className = 'msg ' + (k || '') }
 $('rDel').addEventListener('click', () => { setReceipt(''); scanMsg('') });
 $('scanBtn').addEventListener('click', () => {
@@ -274,10 +275,10 @@ function shrink(file) {
   return new Promise((ok, bad) => {
     const img = new Image(), url = URL.createObjectURL(file);
     img.onload = () => {
-      const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
       const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-      ok(c.toDataURL('image/jpeg', 0.82).split(',')[1]);
+      ok(c.toDataURL('image/jpeg', 0.75).split(',')[1]);
     };
     img.onerror = () => { URL.revokeObjectURL(url); bad(new Error('Не удалось открыть фото.')) };
     img.src = url;
@@ -291,10 +292,13 @@ $('scanFile').addEventListener('change', async e => {
   scanMsg('Распознаю чек… это займёт несколько секунд.', '');
   try {
     const image = await shrink(f);
-    const r = await api('scan', Object.assign({ image, mime: 'image/jpeg' }, authFor(who.id), { staff: who.id }));
-    if (r.receiptId) setReceipt(r.receiptId);
+    const req = Object.assign({ image, mime: 'image/jpeg' }, authFor(who.id), { staff: who.id });
+    // сохранение на Диск идёт параллельно и не задерживает заполнение полей
+    const p = receiptP = api('saveReceipt', req).then(s => { if (receiptP === p && s.receiptId) setReceipt(s.receiptId) }).catch(() => {})
+      .finally(() => { if (receiptP === p) receiptP = null });
+    const r = await api('scan', req);
     const x = r.fields;
-    if (!x) { scanMsg((r.scanError || 'Не удалось распознать чек.') + ' Заполните поля вручную' + (r.receiptId ? ' — фото чека всё равно прикреплено.' : '.'), 'err'); return }
+    if (!x) { scanMsg((r.scanError || 'Не удалось распознать чек.') + ' Заполните поля вручную.', 'err'); return }
     if (!x.isReceipt) { scanMsg('Похоже, на фото не чек. Проверьте и заполните поля вручную.', 'err'); return }
     const got = [];
     if (x.amount > 0 && x.amount <= 100000000) { amt.value = x.amount.toLocaleString('ru-RU'); flash(amt.parentElement); got.push('сумма') }

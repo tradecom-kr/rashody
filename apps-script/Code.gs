@@ -43,6 +43,7 @@ function route_(req) {
   if (a === 'data') return { ok: true, data: readAll_() };
   if (a === 'login') return login_(req);
   if (a === 'scan') return scan_(req);
+  if (a === 'saveReceipt') return saveReceipt_(req);
   if (a === 'roleLogin') return { ok: true, role: role_(req.rolePass) || fail_('Неверный пароль.') };
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -286,25 +287,14 @@ function reject_(req, on) {
 var RECEIPT_FOLDER = 'Чеки — Расходы команды';
 
 function scan_(req) {
-  if (role_(req.rolePass) !== 'owner') staffOk_(req.staff, req.pin);   // только вошедшие сотрудники
-  var b64 = String(req.image || '');
-  if (!b64 || b64.length > 6000000) fail_('Фото не получено или слишком большое.');
-  var mime = /^image\/(jpeg|png|webp)$/.test(String(req.mime)) ? String(req.mime) : 'image/jpeg';
+  var img = image_(req), b64 = img.b64, mime = img.mime;
   var st = settings_();
-  var out = { ok: true, fields: null, receiptId: '' };
-
-  // 1) сохранить фото на Диск (папка создаётся сама)
-  try {
-    var bytes = Utilities.base64Decode(b64);
-    var file = receiptFolder_().createFile(Utilities.newBlob(bytes, mime, 'чек ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH-mm-ss') + '.jpg'));
-    out.receiptId = file.getId();
-  } catch (err) { out.saveError = String(err && err.message || err); }
-
-  // 2) распознать
+  var out = { ok: true, fields: null };
   var key = String(st['Ключ Gemini'] || '').trim();
   if (!key) { out.scanError = 'Распознавание не настроено: нет «Ключ Gemini» в листе «Настройки».'; return out; }
   var cats = String(st['Категории'] || DEFAULT_CATS).split(',').map(function (x) { return x.trim(); }).filter(String);
-  var model = String(st['Модель Gemini'] || 'gemini-flash-latest').trim();
+  // быстрая модель без «размышлений»; если недоступна — запасная с минимальным размышлением
+  var models = [String(st['Модель Gemini'] || 'gemini-3.5-flash-lite').trim(), 'gemini-flash-latest'];
   var prompt = 'Это фото чека (영수증) из Южной Кореи. Извлеки данные. ' +
     'date — дата покупки в формате YYYY-MM-DD (пусто, если не видно). ' +
     'amount — итоговая сумма к оплате в вонах целым числом (합계/결제금액/받을금액; не 부가세 и не 과세물품가액). ' +
@@ -324,9 +314,14 @@ function scan_(req) {
     }
   };
   try {
-    var res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent',
-      { method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': key }, payload: JSON.stringify(body), muteHttpExceptions: true });
-    var code = res.getResponseCode(), txt = res.getContentText();
+    var code = 0, txt = '';
+    for (var mi = 0; mi < models.length; mi++) {
+      if (mi > 0) body.generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+      var res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(models[mi]) + ':generateContent',
+        { method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': key }, payload: JSON.stringify(body), muteHttpExceptions: true });
+      code = res.getResponseCode(); txt = res.getContentText();
+      if (code === 200) break;
+    }
     if (code !== 200) { out.scanError = 'Сервис распознавания ответил ошибкой ' + code + '.'; out.detail = txt.slice(0, 300); return out; }
     var j = JSON.parse(txt);
     var part = j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts && j.candidates[0].content.parts[0];
@@ -341,6 +336,21 @@ function scan_(req) {
     };
   } catch (err) { out.scanError = 'Не удалось распознать чек: ' + String(err && err.message || err); }
   return out;
+}
+
+function image_(req) {
+  if (role_(req.rolePass) !== 'owner') staffOk_(req.staff, req.pin);   // только вошедшие сотрудники
+  var b64 = String(req.image || '');
+  if (!b64 || b64.length > 6000000) fail_('Фото не получено или слишком большое.');
+  return { b64: b64, mime: /^image\/(jpeg|png|webp)$/.test(String(req.mime)) ? String(req.mime) : 'image/jpeg' };
+}
+
+// сохранить фото на Диск (папка создаётся сама) — вызывается параллельно с распознаванием
+function saveReceipt_(req) {
+  var img = image_(req);
+  var file = receiptFolder_().createFile(Utilities.newBlob(Utilities.base64Decode(img.b64), img.mime,
+    'чек ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH-mm-ss') + '.jpg'));
+  return { ok: true, receiptId: file.getId() };
 }
 
 function receiptFolder_() {
